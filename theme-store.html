@@ -1340,7 +1340,10 @@ historyStack.push(proximoEstado);
 
     async function aplicarTemaLoja(tema) {
       try { localStorage.setItem('chef_custom_theme_active', JSON.stringify(tema)); } catch (e) {}
-      try { socket.emit('tema_global_aplicar', tema); } catch (e) {}
+      try {
+        var s = (typeof socket !== 'undefined' && socket) || (typeof window !== 'undefined' && window.socket);
+        if (s && typeof s.emit === 'function') s.emit('tema_global_aplicar', tema);
+      } catch (e) {}
       try {
         await fetch('/api/modulo/temas/aplicar', {
           method: 'POST',

@@ -605,43 +605,92 @@ window.abrirModalRhDonoComColab = async function(id, aba) {
 // ─── Caixa Abrir / Fechar — com modais ───────────────────────
 function abrirCaixaFluxo() {
   const input = document.getElementById('fundo-troco-input');
-  if (input) input.value = '';
+  if (input) input.value = '100,00';
   abrirModal('modal-abrir-caixa');
+  setTimeout(() => { if (input) { input.focus(); input.select(); } }, 100);
 }
 
 function fecharCaixaFluxo() {
   const input = document.getElementById('saldo-final-input');
-  if (input) input.value = '';
+  if (input) input.value = '0,00';
   abrirModal('modal-fechar-caixa');
+  setTimeout(() => { if (input) { input.focus(); input.select(); } }, 100);
 }
 
 window.confirmarAbrirCaixa = function() {
   const input = document.getElementById('fundo-troco-input');
-  const fundo = parseFloat(input ? input.value : '');
-  if (isNaN(fundo) || fundo < 0) {
-    showToast('Digite um valor válido para o fundo de troco.', 'ph-warning', 'error');
-    return;
-  }
+  let raw = input ? input.value : '100.00';
+  if (!raw || !String(raw).trim()) raw = '0';
+  const fundo = parseFloat(String(raw).replace(',', '.'));
+  const fundoFinal = (isNaN(fundo) || fundo < 0) ? 0 : fundo;
+
   fecharModal('modal-abrir-caixa');
   setLoader(true);
-  socket.emit('abrir_caixa', {
-    operador: loggedUser || 'Dono',
-    fundo_troco: fundo
+
+  const op = loggedUser || 'Dono';
+
+  if (typeof socket !== 'undefined' && socket && socket.connected) {
+    socket.emit('abrir_caixa', {
+      operador: op,
+      fundo_troco: fundoFinal
+    });
+  }
+
+  fetch('/api/caixa/abrir', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify({ operador: op, fundo_troco: fundoFinal })
+  })
+  .then(r => r.json())
+  .then(data => {
+    setLoader(false);
+    if (data && data.success) {
+      showToast('✅ Caixa aberto com sucesso!', 'ph-lock-open', 'success');
+      carregarMetricas();
+    }
+  })
+  .catch(() => {
+    setLoader(false);
+    carregarMetricas();
   });
 };
 
 window.confirmarFecharCaixa = function() {
   const input = document.getElementById('saldo-final-input');
-  const saldo = parseFloat(input ? input.value : '');
-  if (isNaN(saldo) || saldo < 0) {
-    showToast('Digite o valor total encontrado no caixa.', 'ph-warning', 'error');
-    return;
-  }
+  let raw = input ? input.value : '0';
+  if (!raw || !String(raw).trim()) raw = '0';
+  const saldo = parseFloat(String(raw).replace(',', '.'));
+  const saldoFinal = (isNaN(saldo) || saldo < 0) ? 0 : saldo;
+
   fecharModal('modal-fechar-caixa');
   setLoader(true);
-  socket.emit('fechar_caixa', {
-    operador: loggedUser || 'Dono',
-    saldo_final: saldo
+
+  const op = loggedUser || 'Dono';
+
+  if (typeof socket !== 'undefined' && socket && socket.connected) {
+    socket.emit('fechar_caixa', {
+      operador: op,
+      saldo_final: saldoFinal,
+      force: true
+    });
+  }
+
+  fetch('/api/caixa/fechar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify({ operador: op, saldo_final: saldoFinal })
+  })
+  .then(r => r.json())
+  .then(data => {
+    setLoader(false);
+    if (data && data.success) {
+      showToast('🔒 Caixa fechado com sucesso!', 'ph-lock-key', 'success');
+      carregarMetricas();
+    }
+  })
+  .catch(() => {
+    setLoader(false);
+    carregarMetricas();
   });
 };
 
@@ -2156,6 +2205,104 @@ window.executarDisparoMassa = async function() {
     }
   } catch(e){
     showToast('Erro ao realizar disparo.', 'ph-warning', 'error');
+  }
+};
+
+// ── Troca Rápida de Restaurante (Minha Rede) ──
+window.abrirTrocarRestaurante = async function() {
+  let modal = document.getElementById('modal-trocar-restaurante-dono');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'modal-trocar-restaurante-dono';
+    modal.className = 'modal-overlay';
+    document.body.appendChild(modal);
+  }
+
+  const token = localStorage.getItem('chef_token') || '';
+  const tidAtual = parseInt(localStorage.getItem('restaurante_id') || '1', 10);
+
+  modal.innerHTML = `
+    <div class="modal-sheet" style="max-width:480px;">
+      <div class="modal-drag"></div>
+      <div class="modal-title-row">
+        <span class="modal-title"><i class="ph-bold ph-storefront" style="color:var(--primary);"></i> Meus Restaurantes</span>
+        <button class="modal-close" onclick="fecharModal('modal-trocar-restaurante-dono')"><i class="ph-bold ph-x"></i></button>
+      </div>
+      <p style="font-size:13px; color:var(--text-sub); margin:0 0 12px 0;">Selecione qual unidade da sua rede você deseja visualizar agora:</p>
+      
+      <div id="lista-restaurantes-rede-dono" style="display:flex; flex-direction:column; gap:8px; max-height:50vh; overflow-y:auto;">
+        <div style="text-align:center; padding:20px; color:var(--text-sub); font-size:13px;">Carregando unidades...</div>
+      </div>
+
+      <button class="btn-cancel" onclick="fecharModal('modal-trocar-restaurante-dono')" style="width:100%; padding:14px; margin-top:10px;">Fechar</button>
+    </div>
+  `;
+
+  modal.classList.remove('hidden');
+
+  try {
+    const r = await fetch('/api/auth/minha-rede', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const d = await r.json();
+    const rede = d.rede || [];
+    const container = document.getElementById('lista-restaurantes-rede-dono');
+    if (!container) return;
+
+    if (rede.length === 0) {
+      container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-sub); font-size:13px;">Nenhuma outra unidade vinculada.</div>`;
+      return;
+    }
+
+    container.innerHTML = rede.map(rst => {
+      const isAtual = rst.id === tidAtual;
+      return `
+        <button type="button" onclick="window.trocarRestauranteDono(${rst.id})" style="display:flex; align-items:center; justify-content:space-between; width:100%; padding:14px 16px; background:${isAtual ? 'var(--primary-light)' : 'var(--card2)'}; border:1.5px solid ${isAtual ? 'var(--primary)' : 'var(--border)'}; border-radius:14px; cursor:pointer; text-align:left; transition:all 0.15s;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div style="width:38px; height:38px; border-radius:10px; background:${isAtual ? 'var(--primary)' : 'rgba(255,255,255,0.06)'}; color:${isAtual ? '#fff' : 'var(--text)'}; display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:800;">
+              ${rst.nome ? rst.nome.charAt(0).toUpperCase() : 'R'}
+            </div>
+            <div>
+              <strong style="display:block; font-size:14.5px; color:var(--text);">${rst.nome || 'Restaurante #' + rst.id}</strong>
+              <span style="font-size:11.5px; color:var(--text-sub);">Unidade ID: ${rst.id}</span>
+            </div>
+          </div>
+          ${isAtual ? '<span style="background:var(--primary); color:#fff; font-size:10px; font-weight:800; padding:3px 8px; border-radius:8px;">ATUAL</span>' : '<i class="ph-bold ph-arrow-right" style="color:var(--text-sub); font-size:16px;"></i>'}
+        </button>
+      `;
+    }).join('');
+  } catch(e) {
+    const container = document.getElementById('lista-restaurantes-rede-dono');
+    if (container) container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--red); font-size:13px;">Erro ao carregar unidades.</div>`;
+  }
+};
+
+window.trocarRestauranteDono = async function(id) {
+  const token = localStorage.getItem('chef_token') || '';
+  showToast('Alternando restaurante...', 'ph-arrows-clockwise', 'info');
+  try {
+    const r = await fetch('/api/auth/trocar-restaurante', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ restaurante_id: id })
+    });
+    const d = await r.json();
+    if (d.success) {
+      if (d.token) localStorage.setItem('chef_token', d.token);
+      localStorage.setItem('restaurante_id', String(d.restaurante_id || id));
+      if (d.restaurante_nome) localStorage.setItem('restaurante_nome', d.restaurante_nome);
+      showToast(`Restaurante alterado para ${d.restaurante_nome || '#' + id}!`, 'ph-check-circle', 'success');
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+    } else {
+      showToast(d.error || 'Erro ao trocar restaurante.', 'ph-warning', 'error');
+    }
+  } catch(e) {
+    showToast('Erro de conexão ao trocar restaurante.', 'ph-warning', 'error');
   }
 };
 

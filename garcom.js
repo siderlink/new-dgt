@@ -165,6 +165,27 @@ if (btnModePin) btnModePin.addEventListener('click', () => {
   document.getElementById('input-pin').focus();
 });
 
+const inputPinEl = document.getElementById('input-pin');
+if (inputPinEl) {
+  let pinAutoTimer = null;
+  inputPinEl.addEventListener('input', () => {
+    const val = inputPinEl.value.trim();
+    clearTimeout(pinAutoTimer);
+    if (val.length >= 4) {
+      pinAutoTimer = setTimeout(() => {
+        const btn = document.getElementById('btn-login');
+        if (btn) btn.click();
+      }, 50);
+    }
+  });
+  inputPinEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const btn = document.getElementById('btn-login');
+      if (btn) btn.click();
+    }
+  });
+}
+
 document.getElementById('btn-login').onclick = () => {
   try {
     if (!document.fullscreenElement) {

@@ -230,9 +230,10 @@
     });
 
     // Emite o pagamento de cada item selecionado para o backend
+    var s = (typeof socket !== 'undefined' && socket) || (typeof window !== 'undefined' && window.socket);
     selecionados.forEach(function (item) {
-      if (typeof socket !== 'undefined') {
-        socket.emit('pagar_fracao_item_garcom', {
+      if (s && typeof s.emit === 'function') {
+        s.emit('pagar_fracao_item_garcom', {
           itemId: item.id,
           valor: item.valorUnit,
           metodo: metodo,

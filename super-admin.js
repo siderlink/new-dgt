@@ -1488,6 +1488,8 @@ function criarRestauranteCompleto() {
   
   var payload = {
     nome: nome,
+    slug: document.getElementById('new-rest-slug') ? document.getElementById('new-rest-slug').value.trim() : undefined,
+    custom_domain: document.getElementById('new-rest-custom-domain') ? document.getElementById('new-rest-custom-domain').value.trim() : undefined,
     licenca: licenca,
     ativo: true,
     chave_ativacao: chave || undefined,
@@ -1516,11 +1518,16 @@ function criarRestauranteCompleto() {
     limparWizard();
     mostrarPassoWizard(1);
     carregarRestaurantes();
+    if (typeof renderDominios === 'function') renderDominios();
   });
 }
 
 function limparWizard() {
   document.getElementById('new-rest-nome').value = '';
+  if (document.getElementById('new-rest-slug')) document.getElementById('new-rest-slug').value = '';
+  if (document.getElementById('new-rest-custom-domain')) document.getElementById('new-rest-custom-domain').value = '';
+  var wPrev = document.getElementById('wizard-domain-preview');
+  if (wPrev) wPrev.style.display = 'none';
   document.getElementById('new-rest-cnpj').value = '';
   document.getElementById('new-rest-telefone').value = '';
   document.getElementById('new-rest-endereco').value = '';
@@ -4307,8 +4314,33 @@ document.addEventListener('DOMContentLoaded', function() {
   })();
 
 
-  /* ═══ RENDER DOMÍNIOS ═══ */
+  /* ═══ RENDER DOMÍNIOS & GERENCIAMENTO DE SUBDOMÍNIOS ═══ */
   var _baseDomain = 'chefcozinha.com.br';
+
+  window.slugifyString = function(str) {
+    if (!str) return '';
+    return str
+      .toString()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 35);
+  };
+
+  function updateBaseDomainUI(newBase) {
+    if (!newBase) return;
+    _baseDomain = newBase.trim().toLowerCase();
+    var suffixEls = [document.getElementById('dom-base-suffix'), document.getElementById('inst-base-suffix'), document.getElementById('wizard-base-suffix')];
+    suffixEls.forEach(function(el) {
+      if (el) el.textContent = '.' + _baseDomain;
+    });
+    var baseInput = document.getElementById('cfg-base-domain-input');
+    if (baseInput && !baseInput.matches(':focus')) baseInput.value = _baseDomain;
+    var basePreview = document.getElementById('dom-metric-base-preview');
+    if (basePreview) basePreview.textContent = _baseDomain;
+  }
 
   window.renderDominios = function() {
     apiGet('/api/super/dominios', function(err, data) {
@@ -4320,60 +4352,92 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       _baseDomain = data.baseDomain || 'chefcozinha.com.br';
-      var tenants = data.tenants || [];
+      updateBaseDomainUI(_baseDomain);
+
+      var allTenants = data.tenants || [];
+
+      // Update metrics
+      var metricTotal = document.getElementById('dom-metric-total');
+      var metricSubdoms = document.getElementById('dom-metric-subdoms');
+      var metricCustom = document.getElementById('dom-metric-custom');
+      if (metricTotal) metricTotal.textContent = allTenants.length;
+      if (metricSubdoms) metricSubdoms.textContent = allTenants.filter(function(t) { return t.slug && t.slug.trim(); }).length;
+      if (metricCustom) metricCustom.textContent = allTenants.filter(function(t) { return t.custom_domain && t.custom_domain.trim(); }).length;
 
       // Populate select
       if (select) {
         var currentVal = select.value;
-        select.innerHTML = '<option value="">Selecione...</option>';
-        for (var s = 0; s < tenants.length; s++) {
-          var t = tenants[s];
+        select.innerHTML = '<option value="">Selecione um restaurante...</option>';
+        for (var s = 0; s < allTenants.length; s++) {
+          var t = allTenants[s];
           var opt = document.createElement('option');
           opt.value = t.id;
-          opt.textContent = t.id + ' — ' + (t.nome || 'Sem nome');
+          opt.textContent = '#' + t.id + ' — ' + (t.nome || 'Sem nome') + (t.slug ? ' (' + t.slug + ')' : ' [sem subdomínio]');
           select.appendChild(opt);
         }
         if (currentVal) select.value = currentVal;
       }
 
       // Filter
-      var searchVal = (document.getElementById('dom-search') ? document.getElementById('dom-search').value : '').toLowerCase();
+      var tenants = allTenants;
+      var searchVal = (document.getElementById('dom-search') ? document.getElementById('dom-search').value : '').toLowerCase().trim();
       if (searchVal) {
         tenants = tenants.filter(function(t) {
-          return (t.nome || '').toLowerCase().indexOf(searchVal) !== -1 ||
+          return (String(t.id) === searchVal) ||
+                 (t.nome || '').toLowerCase().indexOf(searchVal) !== -1 ||
                  (t.slug || '').toLowerCase().indexOf(searchVal) !== -1 ||
                  (t.custom_domain || '').toLowerCase().indexOf(searchVal) !== -1;
         });
       }
 
       if (tenants.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:20px;">Nenhum restaurante encontrado.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:24px;"><i class="fa-solid fa-inbox" style="font-size:1.5rem;display:block;margin-bottom:0.5rem;"></i>Nenhuma instância encontrada para o filtro.</td></tr>';
         return;
       }
 
       var html = '';
       for (var i = 0; i < tenants.length; i++) {
-        var t = tenants[i];
-        var slugUrl = t.slug ? 'https://' + t.slug + '.' + _baseDomain : '—';
-        var slugDisplay = t.slug
-          ? '<code style="background:rgba(16,185,129,0.1);color:#34d399;padding:2px 6px;border-radius:4px;font-size:0.82rem;cursor:pointer;" onclick="copyDomainUrl(\'' + escapeHtml(slugUrl) + '\')" title="Clique para copiar">' + escapeHtml(t.slug) + '</code>'
+        var item = tenants[i];
+        var slugUrl = item.slug ? 'https://' + item.slug + '.' + _baseDomain : '';
+        var customUrl = item.custom_domain ? 'https://' + item.custom_domain : '';
+
+        var slugDisplay = item.slug
+          ? '<div style="display:flex;align-items:center;gap:0.4rem;">' +
+              '<code style="background:rgba(16,185,129,0.12);color:#34d399;padding:3px 7px;border-radius:6px;font-size:0.84rem;font-weight:600;">' + escapeHtml(item.slug) + '</code>' +
+              '<button type="button" class="btn-row-action" style="padding:2px 6px;font-size:0.75rem;" onclick="copyDomainUrl(\'' + escapeHtml(slugUrl) + '\')" title="Copiar URL Completa"><i class="fa-solid fa-copy"></i></button>' +
+            '</div>'
+          : '<span style="color:var(--text-muted);font-style:italic;font-size:0.82rem;">Não configurado</span>';
+
+        var urlLinkDisplay = item.slug
+          ? '<a href="' + slugUrl + '" target="_blank" rel="noopener noreferrer" style="color:var(--info);text-decoration:none;display:inline-flex;align-items:center;gap:0.35rem;font-size:0.82rem;font-family:monospace;">' +
+              '<i class="fa-solid fa-arrow-up-right-from-square" style="font-size:0.75rem;"></i>' + escapeHtml(slugUrl) +
+            '</a>'
           : '<span style="color:var(--text-muted);">—</span>';
-        var customDisplay = t.custom_domain
-          ? '<code style="background:rgba(59,130,246,0.1);color:#60a5fa;padding:2px 6px;border-radius:4px;font-size:0.82rem;cursor:pointer;" onclick="copyDomainUrl(\'https://' + escapeHtml(t.custom_domain) + '\')" title="Clique para copiar">' + escapeHtml(t.custom_domain) + '</code>'
+
+        var customDisplay = item.custom_domain
+          ? '<div style="display:flex;align-items:center;gap:0.4rem;">' +
+              '<code style="background:rgba(168,85,247,0.12);color:#c084fc;padding:3px 7px;border-radius:6px;font-size:0.84rem;">' + escapeHtml(item.custom_domain) + '</code>' +
+              '<a href="' + customUrl + '" target="_blank" class="btn-row-action" style="padding:2px 6px;font-size:0.75rem;color:#c084fc;text-decoration:none;" title="Abrir Domínio"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>' +
+            '</div>'
           : '<span style="color:var(--text-muted);">—</span>';
-        var statusBadge = t.ativo ? '<span class="badge badge-ativo">Ativo</span>' : '<span class="badge badge-bloqueado">Inativo</span>';
+
+        var statusBadge = item.ativo ? '<span class="badge badge-ativo"><i class="fa-solid fa-circle-check"></i> Ativo</span>' : '<span class="badge badge-bloqueado">Inativo</span>';
 
         html += '<tr>' +
-          '<td style="font-weight:600;">' + t.id + '</td>' +
-          '<td style="font-weight:600;color:white;">' + escapeHtml(t.nome || 'Sem nome') + '</td>' +
+          '<td style="font-weight:700;color:var(--text-muted);">' + item.id + '</td>' +
+          '<td>' +
+            '<div style="font-weight:600;color:white;font-size:0.92rem;">' + escapeHtml(item.nome || 'Sem nome') + '</div>' +
+            '<div style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;">Plano: ' + escapeHtml(item.licenca || 'trial') + '</div>' +
+          '</td>' +
           '<td>' + slugDisplay + '</td>' +
-          '<td style="font-size:0.8rem;color:var(--text-muted);">' + (t.slug ? '<a href="' + slugUrl + '" target="_blank" style="color:var(--info);text-decoration:none;">' + escapeHtml(slugUrl) + '</a>' : '—') + '</td>' +
+          '<td>' + urlLinkDisplay + '</td>' +
           '<td>' + customDisplay + '</td>' +
           '<td>' + statusBadge + '</td>' +
           '<td>' +
-            '<div class="row-actions">' +
-              '<button class="btn-row-action edit-action" onclick="editDomain(' + t.id + ',\'' + escapeHtml(t.slug || '') + '\',\'' + escapeHtml(t.custom_domain || '') + '\')" title="Editar"><i class="fa-solid fa-pen"></i></button>' +
-              '<button class="btn-row-action delete-action" onclick="deleteDomain(' + t.id + ')" title="Remover domínios"><i class="fa-solid fa-trash"></i></button>' +
+            '<div class="row-actions" style="justify-content:flex-end;">' +
+              (item.slug ? '<a href="' + slugUrl + '" target="_blank" class="btn-row-action" title="Abrir Instância"><i class="fa-solid fa-globe" style="color:var(--success);"></i></a>' : '') +
+              '<button class="btn-row-action edit-action" onclick="editDomain(' + item.id + ',\'' + escapeHtml(item.slug || '') + '\',\'' + escapeHtml(item.custom_domain || '') + '\')" title="Editar Subdomínio"><i class="fa-solid fa-pen"></i></button>' +
+              '<button class="btn-row-action delete-action" onclick="deleteDomain(' + item.id + ')" title="Remover Domínios"><i class="fa-solid fa-trash"></i></button>' +
             '</div>' +
           '</td>' +
         '</tr>';
@@ -4387,33 +4451,53 @@ document.addEventListener('DOMContentLoaded', function() {
     var slugInput = document.getElementById('dom-slug');
     var customInput = document.getElementById('dom-custom');
     if (select) select.value = id;
-    if (slugInput) slugInput.value = slug;
-    if (customInput) customInput.value = customDomain;
+    if (slugInput) slugInput.value = slug || '';
+    if (customInput) customInput.value = customDomain || '';
+    updateDomFormPreview();
     if (slugInput) slugInput.focus();
+    var banner = document.getElementById('sec-dominios');
+    if (banner) banner.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  function updateDomFormPreview() {
+    var slugInput = document.getElementById('dom-slug');
+    var previewBanner = document.getElementById('dom-preview-banner');
+    var previewText = document.getElementById('dom-preview-url-text');
+    var slug = (slugInput ? slugInput.value : '').trim();
+    if (slug && previewBanner && previewText) {
+      previewBanner.style.display = 'block';
+      previewText.textContent = 'https://' + slug + '.' + _baseDomain;
+    } else if (previewBanner) {
+      previewBanner.style.display = 'none';
+    }
+  }
+
   window.copyDomainUrl = function(url) {
+    if (!url) return;
     if (navigator.clipboard) {
       navigator.clipboard.writeText(url).then(function() {
-        showToast('URL copiada: ' + url, 'success');
+        showToast('URL copiada para a área de transferência: ' + url, 'success');
+      }).catch(function() {
+        showToast('URL: ' + url, 'info');
       });
     } else {
-      showToast(url, 'info');
+      showToast('URL: ' + url, 'info');
     }
   };
 
   window.deleteDomain = function(restId) {
-    if (!confirm('Remover todos os domínios deste restaurante?')) return;
+    if (!confirm('Tem certeza que deseja desvincular o subdomínio e domínio próprio desta instância (ID ' + restId + ')?')) return;
     apiDelete('/api/super/dominios', { restaurante_id: restId }, function(err, data) {
       if (err || !data || !data.ok) {
         showToast('Erro ao remover domínios: ' + (err ? err.message : (data ? data.erro : 'Falha')), 'danger');
         return;
       }
-      showToast('Domínios removidos com sucesso!', 'success');
+      showToast('Subdomínio e domínios desvinculados com sucesso!', 'success');
       renderDominios();
     });
   };
 
+  // Salvar Domínio no form inline
   var btnSalvarDom = document.getElementById('btn-salvar-dom');
   if (btnSalvarDom) {
     btnSalvarDom.addEventListener('click', function() {
@@ -4422,24 +4506,284 @@ document.addEventListener('DOMContentLoaded', function() {
       var customInput = document.getElementById('dom-custom');
       var tenantId = select ? parseInt(select.value, 10) : 0;
       if (!tenantId) {
-        showToast('Selecione um restaurante.', 'warning');
+        showToast('Selecione uma instância/restaurante para associar.', 'warning');
+        if (select) select.focus();
         return;
       }
+      var cleanSlug = (slugInput ? slugInput.value : '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '');
+      var cleanCustom = (customInput ? customInput.value : '').trim().toLowerCase();
+
       var payload = {
         restaurante_id: tenantId,
-        slug: slugInput ? slugInput.value : '',
-        custom_domain: customInput ? customInput.value : ''
+        slug: cleanSlug,
+        custom_domain: cleanCustom
       };
+
+      btnSalvarDom.disabled = true;
+      btnSalvarDom.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Salvando...</span>';
+
       apiPost('/api/super/dominios', payload, function(err, data) {
+        btnSalvarDom.disabled = false;
+        btnSalvarDom.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> <span>Salvar Domínio</span>';
         if (err || !data || !data.ok) {
           showToast('Erro ao salvar domínio: ' + (err ? err.message : (data ? data.erro : 'Falha')), 'danger');
           return;
         }
-        showToast('Domínio salvo com sucesso!', 'success');
+        var targetUrl = cleanSlug ? 'https://' + cleanSlug + '.' + _baseDomain : (cleanCustom ? 'https://' + cleanCustom : '');
+        showToast('Domínio configurado com sucesso! ' + (targetUrl ? 'Rota ativa: ' + targetUrl : ''), 'success');
         renderDominios();
       });
     });
   }
+
+  // Gerar slug do restaurante selecionado
+  var btnAutoSlugForm = document.getElementById('btn-auto-slug-form');
+  if (btnAutoSlugForm) {
+    btnAutoSlugForm.addEventListener('click', function() {
+      var select = document.getElementById('dom-tenant-select');
+      if (!select || !select.value) {
+        showToast('Selecione um restaurante primeiro.', 'warning');
+        return;
+      }
+      var selectedText = select.options[select.selectedIndex].text;
+      var rawName = selectedText.split('—')[1] || selectedText;
+      rawName = rawName.split('(')[0].split('[')[0].trim();
+      var slug = window.slugifyString(rawName);
+      var slugInput = document.getElementById('dom-slug');
+      if (slugInput) {
+        slugInput.value = slug;
+        updateDomFormPreview();
+      }
+    });
+  }
+
+  var domSlugInput = document.getElementById('dom-slug');
+  if (domSlugInput) {
+    domSlugInput.addEventListener('input', function() {
+      this.value = this.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+      updateDomFormPreview();
+    });
+  }
+
+  // Salvar Domínio Base da Plataforma
+  var btnSalvarBaseDomain = document.getElementById('btn-salvar-base-domain');
+  if (btnSalvarBaseDomain) {
+    btnSalvarBaseDomain.addEventListener('click', function() {
+      var input = document.getElementById('cfg-base-domain-input');
+      var val = (input ? input.value : '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+      if (!val || val.length < 3) {
+        showToast('Informe um domínio base válido (ex: chefcozinha.com.br).', 'warning');
+        return;
+      }
+      btnSalvarBaseDomain.disabled = true;
+      btnSalvarBaseDomain.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Salvando...';
+      apiPost('/api/super/dominios/base-domain', { base_domain: val }, function(err, data) {
+        btnSalvarBaseDomain.disabled = false;
+        btnSalvarBaseDomain.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> <span>Salvar Domínio Base</span>';
+        if (err || !data || !data.ok) {
+          showToast('Erro ao atualizar domínio base: ' + (err ? err.message : (data ? data.erro : 'Falha')), 'danger');
+          return;
+        }
+        showToast('Domínio base da plataforma atualizado para: ' + val, 'success');
+        updateBaseDomainUI(val);
+        renderDominios();
+      });
+    });
+  }
+
+  // Diagnóstico de Domínios
+  var btnDiagnosticoDom = document.getElementById('btn-diagnostico-dom');
+  if (btnDiagnosticoDom) {
+    btnDiagnosticoDom.addEventListener('click', function() {
+      btnDiagnosticoDom.disabled = true;
+      btnDiagnosticoDom.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Testando...';
+      apiGet('/api/super/dominios/diagnostico', function(err, data) {
+        btnDiagnosticoDom.disabled = false;
+        btnDiagnosticoDom.innerHTML = '<i class="fa-solid fa-stethoscope"></i> <span>Diagnóstico</span>';
+        if (err || !data || !data.ok) {
+          showToast('Erro ao executar diagnóstico: ' + (err ? err.message : 'Falha'), 'danger');
+          return;
+        }
+        var m = data.metricas || {};
+        var msg = 'Diagnóstico Concluído:\n' +
+                  '• Total de Instâncias: ' + (m.total_instancias || 0) + '\n' +
+                  '• Com Subdomínio: ' + (m.com_subdominio || 0) + '\n' +
+                  '• Com Domínio Próprio: ' + (m.com_dominio_proprio || 0) + '\n' +
+                  '• Sem Domínio: ' + (m.sem_dominio || 0) + '\n' +
+                  '• Domínio Base Ativo: ' + (data.baseDomain || _baseDomain);
+        showToast(msg, 'success');
+        renderDominios();
+      });
+    });
+  }
+
+  // Abrir Modal de Nova Instância com Subdomínio
+  var btnAbrirModalNovaInst = document.getElementById('btn-abrir-modal-nova-instancia-dom');
+  if (btnAbrirModalNovaInst) {
+    btnAbrirModalNovaInst.addEventListener('click', function() {
+      var modal = document.getElementById('modal-nova-instancia-dom');
+      if (!modal) return;
+      document.getElementById('inst-nome').value = '';
+      document.getElementById('inst-slug').value = '';
+      document.getElementById('inst-custom-domain').value = '';
+      document.getElementById('inst-admin-email').value = '';
+      document.getElementById('inst-admin-senha').value = 'admin123';
+      document.getElementById('inst-telefone').value = '';
+      updateInstPreview('');
+      modal.classList.add('active');
+      setTimeout(function() {
+        var inp = document.getElementById('inst-nome');
+        if (inp) inp.focus();
+      }, 100);
+    });
+  }
+
+  function updateInstPreview(slug) {
+    var preview = document.getElementById('inst-url-preview');
+    if (!preview) return;
+    var clean = (slug || document.getElementById('inst-slug').value || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+    if (clean) {
+      preview.textContent = 'https://' + clean + '.' + _baseDomain;
+      preview.style.color = '#34d399';
+    } else {
+      preview.textContent = 'https://[subdominio].' + _baseDomain;
+      preview.style.color = 'var(--text-muted)';
+    }
+  }
+
+  var instNomeInput = document.getElementById('inst-nome');
+  if (instNomeInput) {
+    instNomeInput.addEventListener('input', function() {
+      var autoSlug = window.slugifyString(this.value);
+      var slugField = document.getElementById('inst-slug');
+      if (slugField) {
+        slugField.value = autoSlug;
+        updateInstPreview(autoSlug);
+      }
+      var emailField = document.getElementById('inst-admin-email');
+      if (emailField && (!emailField.value || emailField.value.indexOf('@') !== -1)) {
+        if (autoSlug) emailField.value = 'admin@' + autoSlug + '.com';
+      }
+    });
+  }
+
+  var instSlugInput = document.getElementById('inst-slug');
+  if (instSlugInput) {
+    instSlugInput.addEventListener('input', function() {
+      this.value = this.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+      updateInstPreview(this.value);
+    });
+  }
+
+  var btnInstGerarSlug = document.getElementById('btn-inst-gerar-slug');
+  if (btnInstGerarSlug) {
+    btnInstGerarSlug.addEventListener('click', function() {
+      var nome = (document.getElementById('inst-nome') ? document.getElementById('inst-nome').value : '').trim();
+      var slug = window.slugifyString(nome || 'restaurante-' + Math.floor(Math.random()*1000));
+      var slugField = document.getElementById('inst-slug');
+      if (slugField) {
+        slugField.value = slug;
+        updateInstPreview(slug);
+      }
+    });
+  }
+
+  // Salvar Nova Instância com Subdomínio
+  var btnSalvarNovaInst = document.getElementById('btn-salvar-nova-instancia-dom');
+  if (btnSalvarNovaInst) {
+    btnSalvarNovaInst.addEventListener('click', function() {
+      var nome = (document.getElementById('inst-nome') ? document.getElementById('inst-nome').value : '').trim();
+      var slug = (document.getElementById('inst-slug') ? document.getElementById('inst-slug').value : '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '');
+      var customDomain = (document.getElementById('inst-custom-domain') ? document.getElementById('inst-custom-domain').value : '').trim().toLowerCase();
+      var adminEmail = (document.getElementById('inst-admin-email') ? document.getElementById('inst-admin-email').value : '').trim();
+      var adminSenha = (document.getElementById('inst-admin-senha') ? document.getElementById('inst-admin-senha').value : '').trim();
+      var plano = document.getElementById('inst-plano') ? document.getElementById('inst-plano').value : 'premium';
+      var telefone = (document.getElementById('inst-telefone') ? document.getElementById('inst-telefone').value : '').trim();
+
+      if (!nome) {
+        showToast('Informe o nome da nova instância/restaurante.', 'warning');
+        document.getElementById('inst-nome').focus();
+        return;
+      }
+      if (!slug) {
+        slug = window.slugifyString(nome);
+        if (document.getElementById('inst-slug')) document.getElementById('inst-slug').value = slug;
+      }
+      if (!slug || slug.length < 2) {
+        showToast('Informe um subdomínio válido com pelo menos 2 caracteres.', 'warning');
+        if (document.getElementById('inst-slug')) document.getElementById('inst-slug').focus();
+        return;
+      }
+
+      var payload = {
+        nome: nome,
+        slug: slug,
+        custom_domain: customDomain || undefined,
+        licenca: plano,
+        admin_email: adminEmail || undefined,
+        admin_senha: adminSenha || 'admin123',
+        admin_nome: 'Administrador ' + nome,
+        telefone: telefone || undefined,
+        ativo: true
+      };
+
+      btnSalvarNovaInst.disabled = true;
+      btnSalvarNovaInst.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Criando banco e provisionando subdomínio...</span>';
+
+      apiPost('/api/super/dominios/criar-instancia', payload, function(err, data) {
+        btnSalvarNovaInst.disabled = false;
+        btnSalvarNovaInst.innerHTML = '<i class="fa-solid fa-rocket"></i> <span>Criar Instância & Provisionar Subdomínio</span>';
+        if (err || !data || !data.ok) {
+          showToast('Erro ao criar instância: ' + (err ? err.message : (data ? data.erro : 'Falha')), 'danger');
+          return;
+        }
+        var modal = document.getElementById('modal-nova-instancia-dom');
+        if (modal) modal.classList.remove('active');
+
+        var directUrl = data.subdomain_url || ('https://' + slug + '.' + _baseDomain);
+        showToast('Instância #' + data.id + ' ("' + nome + '") criada com sucesso no subdomínio: ' + slug + '\nURL: ' + directUrl, 'success');
+
+        renderDominios();
+        if (typeof carregarRestaurantes === 'function') carregarRestaurantes();
+      });
+    });
+  }
+
+  // Auto-slug in the 5-step wizard
+  var newRestNome = document.getElementById('new-rest-nome');
+  if (newRestNome) {
+    newRestNome.addEventListener('input', function() {
+      var slugInput = document.getElementById('new-rest-slug');
+      var previewBox = document.getElementById('wizard-domain-preview');
+      var previewUrl = document.getElementById('wizard-domain-preview-url');
+      if (slugInput) {
+        var generated = window.slugifyString(this.value);
+        slugInput.value = generated;
+        if (generated && previewBox && previewUrl) {
+          previewBox.style.display = 'block';
+          previewUrl.textContent = 'https://' + generated + '.' + _baseDomain;
+        } else if (previewBox) {
+          previewBox.style.display = 'none';
+        }
+      }
+    });
+  }
+
+  var newRestSlug = document.getElementById('new-rest-slug');
+  if (newRestSlug) {
+    newRestSlug.addEventListener('input', function() {
+      this.value = this.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+      var previewBox = document.getElementById('wizard-domain-preview');
+      var previewUrl = document.getElementById('wizard-domain-preview-url');
+      if (this.value && previewBox && previewUrl) {
+        previewBox.style.display = 'block';
+        previewUrl.textContent = 'https://' + this.value + '.' + _baseDomain;
+      } else if (previewBox) {
+        previewBox.style.display = 'none';
+      }
+    });
+  }
+
   var btnRefreshDom = document.getElementById('btn-refresh-dom');
   if (btnRefreshDom) {
     btnRefreshDom.addEventListener('click', function() { renderDominios(); });
@@ -4451,8 +4795,6 @@ document.addEventListener('DOMContentLoaded', function() {
   var domTenantSelect = document.getElementById('dom-tenant-select');
   if (domTenantSelect) {
     domTenantSelect.addEventListener('change', function() {
-      var tenants = [];
-      // Find tenant data from the table to prefill
       apiGet('/api/super/dominios', function(err, data) {
         if (err || !data || !data.ok) return;
         var found = (data.tenants || []).find(function(t) { return t.id === parseInt(domTenantSelect.value, 10); });
@@ -4461,6 +4803,7 @@ document.addEventListener('DOMContentLoaded', function() {
           var customInput = document.getElementById('dom-custom');
           if (slugInput) slugInput.value = found.slug || '';
           if (customInput) customInput.value = found.custom_domain || '';
+          updateDomFormPreview();
         }
       });
     });
@@ -8489,10 +8832,10 @@ initSuperAdminSockets = function () {
   });
 
   // Listener de Alerta em Tempo Real via Socket
-  if (typeof io !== 'undefined') {
-    try {
-      const socket = io();
-      socket.on('synccheff_alerta_violacao', (alerta) => {
+  try {
+    const synccheffSocket = (typeof _superAdminSocket !== 'undefined' && _superAdminSocket) || (typeof window !== 'undefined' && window.superAdminSocket) || (typeof window !== 'undefined' && window.socket) || (typeof io !== 'undefined' ? io() : null);
+    if (synccheffSocket && synccheffSocket.on) {
+      synccheffSocket.on('synccheff_alerta_violacao', (alerta) => {
         window.carregarSyncCheffStatus();
         if (typeof Swal !== 'undefined') {
           Swal.fire({
@@ -8503,8 +8846,8 @@ initSuperAdminSockets = function () {
           });
         }
       });
-    } catch(e) {}
-  }
+    }
+  } catch(e) {}
 })();
 
 

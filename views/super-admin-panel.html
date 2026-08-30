@@ -2125,65 +2125,146 @@
 
         <!-- ════ SEÇÃO: DOMÍNIOS POR TENANT ════ -->
         <div class="content-section" id="sec-dominios">
-          <div class="info-banner">
-            <i class="fa-solid fa-globe"></i>
-            <div class="info-banner-content">
-              <h4>Domínios por Tenant</h4>
-              <p>Configure subdomínios (ex: <strong>pizzaria.chefcozinha.com.br</strong>) ou domínios próprios (ex:
-                <strong>www.pizzariabella.com.br</strong>) para cada restaurante. O DNS do domínio próprio deve apontar
-                para o IP do servidor.</p>
+          <div class="info-banner" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;">
+            <div style="display:flex;align-items:center;gap:1rem;">
+              <i class="fa-solid fa-globe" style="font-size:1.8rem;color:var(--primary);"></i>
+              <div class="info-banner-content">
+                <h4 style="margin:0 0 0.25rem 0;font-size:1.05rem;">Gerenciamento de Subdomínios & Instâncias Multi-Tenant</h4>
+                <p style="margin:0;font-size:0.85rem;">Crie novas instâncias isoladas com subdomínio exclusivo (ex: <strong>pizzaria.chefcozinha.com.br</strong>) ou associe domínios próprios.</p>
+              </div>
+            </div>
+            <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
+              <button class="btn-action btn-primary-action" id="btn-abrir-modal-nova-instancia-dom" style="box-shadow:0 4px 12px rgba(252,75,21,0.25);">
+                <i class="fa-solid fa-plus-circle"></i> <span>Nova Instância com Subdomínio</span>
+              </button>
             </div>
           </div>
 
-          <!-- Formulário de domínio -->
-          <div
-            style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:1.5rem;margin-bottom:1.5rem;">
-            <h4 style="font-family:'Outfit',sans-serif;margin-bottom:1rem;"><i class="fa-solid fa-pen"
-                style="color:var(--primary);"></i> Configurar Domínio</h4>
-            <div style="display:grid;grid-template-columns:120px 1fr 1fr auto;gap:1rem;align-items:end;">
-              <div class="form-group">
-                <label style="font-size:0.82rem;">Restaurante</label>
+          <!-- Métricas de Domínios -->
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:1.5rem;">
+            <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:1.2rem;display:flex;align-items:center;gap:1rem;">
+              <div style="width:48px;height:48px;border-radius:12px;background:rgba(59,130,246,0.12);color:#60a5fa;display:flex;align-items:center;justify-content:center;font-size:1.3rem;">
+                <i class="fa-solid fa-server"></i>
+              </div>
+              <div>
+                <div style="font-size:0.78rem;color:var(--text-muted);text-transform:uppercase;font-weight:600;letter-spacing:0.5px;">Total Instâncias</div>
+                <div id="dom-metric-total" style="font-size:1.5rem;font-weight:700;color:white;">0</div>
+              </div>
+            </div>
+
+            <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:1.2rem;display:flex;align-items:center;gap:1rem;">
+              <div style="width:48px;height:48px;border-radius:12px;background:rgba(16,185,129,0.12);color:#34d399;display:flex;align-items:center;justify-content:center;font-size:1.3rem;">
+                <i class="fa-solid fa-link"></i>
+              </div>
+              <div>
+                <div style="font-size:0.78rem;color:var(--text-muted);text-transform:uppercase;font-weight:600;letter-spacing:0.5px;">Subdomínios Ativos</div>
+                <div id="dom-metric-subdoms" style="font-size:1.5rem;font-weight:700;color:#34d399;">0</div>
+              </div>
+            </div>
+
+            <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:1.2rem;display:flex;align-items:center;gap:1rem;">
+              <div style="width:48px;height:48px;border-radius:12px;background:rgba(168,85,247,0.12);color:#c084fc;display:flex;align-items:center;justify-content:center;font-size:1.3rem;">
+                <i class="fa-solid fa-globe"></i>
+              </div>
+              <div>
+                <div style="font-size:0.78rem;color:var(--text-muted);text-transform:uppercase;font-weight:600;letter-spacing:0.5px;">Domínios Próprios</div>
+                <div id="dom-metric-custom" style="font-size:1.5rem;font-weight:700;color:#c084fc;">0</div>
+              </div>
+            </div>
+
+            <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:1.2rem;display:flex;align-items:center;gap:1rem;">
+              <div style="width:48px;height:48px;border-radius:12px;background:rgba(252,75,21,0.12);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:1.3rem;">
+                <i class="fa-solid fa-network-wired"></i>
+              </div>
+              <div>
+                <div style="font-size:0.78rem;color:var(--text-muted);text-transform:uppercase;font-weight:600;letter-spacing:0.5px;">Domínio Base</div>
+                <div id="dom-metric-base-preview" style="font-size:1rem;font-weight:700;color:white;word-break:break-all;">chefcozinha.com.br</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card de Configuração de Domínio Base da Plataforma -->
+          <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:1.3rem 1.5rem;margin-bottom:1.5rem;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.8rem;flex-wrap:wrap;gap:0.5rem;">
+              <h4 style="font-family:'Outfit',sans-serif;margin:0;font-size:0.98rem;color:white;">
+                <i class="fa-solid fa-sliders" style="color:var(--primary);margin-right:0.4rem;"></i> Domínio Base Principal da Plataforma (SaaS)
+              </h4>
+              <span style="font-size:0.78rem;color:var(--text-muted);">Define o sufixo padrão de todos os subdomínios dos clientes</span>
+            </div>
+            <div style="display:flex;gap:0.8rem;align-items:center;flex-wrap:wrap;">
+              <div style="flex:1;min-width:260px;position:relative;">
+                <input type="text" id="cfg-base-domain-input" placeholder="ex: chefcozinha.com.br"
+                  style="width:100%;padding:0.65rem 0.9rem;background:rgba(0,0,0,0.25);border:1px solid var(--border-color);border-radius:8px;color:white;font-size:0.92rem;">
+              </div>
+              <button class="btn-action btn-primary-action" id="btn-salvar-base-domain" style="height:40px;white-space:nowrap;">
+                <i class="fa-solid fa-floppy-disk"></i> <span>Salvar Domínio Base</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Formulário Rápido de Associação de Subdomínio / Domínio a Restaurante Existente -->
+          <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:1.5rem;margin-bottom:1.5rem;">
+            <h4 style="font-family:'Outfit',sans-serif;margin-bottom:1rem;font-size:0.98rem;color:white;">
+              <i class="fa-solid fa-pen-to-square" style="color:var(--primary);margin-right:0.4rem;"></i> Associar Subdomínio / Domínio a Instância Existente
+            </h4>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)) auto;gap:1rem;align-items:end;">
+              <div class="form-group" style="margin-bottom:0;">
+                <label style="font-size:0.82rem;">Instância / Restaurante</label>
                 <select id="dom-tenant-select"
-                  style="width:100%;padding:0.6rem 0.8rem;background:rgba(0,0,0,0.25);border:1px solid var(--border-color);border-radius:8px;color:white;font-size:0.9rem;">
+                  style="width:100%;padding:0.65rem 0.8rem;background:rgba(0,0,0,0.25);border:1px solid var(--border-color);border-radius:8px;color:white;font-size:0.9rem;">
                   <option value="">Selecione...</option>
                 </select>
               </div>
-              <div class="form-group">
-                <label style="font-size:0.82rem;">Subdomínio</label>
+              <div class="form-group" style="margin-bottom:0;">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                  <label style="font-size:0.82rem;">Subdomínio (Slug)</label>
+                  <button type="button" id="btn-auto-slug-form" style="background:none;border:none;color:var(--primary);font-size:0.75rem;cursor:pointer;padding:0;text-decoration:underline;">
+                    Gerar do Nome
+                  </button>
+                </div>
                 <div style="display:flex;align-items:center;gap:0;">
                   <input type="text" id="dom-slug" placeholder="meu-restaurante"
-                    style="width:100%;padding:0.6rem 0.8rem;background:rgba(0,0,0,0.25);border:1px solid var(--border-color);border-radius:8px 0 0 8px;color:white;font-size:0.9rem;">
-                  <span
-                    style="padding:0.6rem 0.8rem;background:rgba(255,255,255,0.05);border:1px solid var(--border-color);border-left:none;border-radius:0 8px 8px 0;color:var(--text-muted);font-size:0.8rem;white-space:nowrap;">.chefcozinha.com.br</span>
+                    style="width:100%;padding:0.65rem 0.8rem;background:rgba(0,0,0,0.25);border:1px solid var(--border-color);border-radius:8px 0 0 8px;color:white;font-size:0.9rem;">
+                  <span id="dom-base-suffix"
+                    style="padding:0.65rem 0.8rem;background:rgba(255,255,255,0.05);border:1px solid var(--border-color);border-left:none;border-radius:0 8px 8px 0;color:var(--text-muted);font-size:0.8rem;white-space:nowrap;">.chefcozinha.com.br</span>
                 </div>
               </div>
-              <div class="form-group">
+              <div class="form-group" style="margin-bottom:0;">
                 <label style="font-size:0.82rem;">Domínio Próprio (opcional)</label>
-                <input type="text" id="dom-custom" placeholder="www.exemplo.com.br"
-                  style="width:100%;padding:0.6rem 0.8rem;background:rgba(0,0,0,0.25);border:1px solid var(--border-color);border-radius:8px;color:white;font-size:0.9rem;">
+                <input type="text" id="dom-custom" placeholder="ex: cardapio.pizzaria.com.br"
+                  style="width:100%;padding:0.65rem 0.8rem;background:rgba(0,0,0,0.25);border:1px solid var(--border-color);border-radius:8px;color:white;font-size:0.9rem;">
               </div>
-              <button class="btn-action btn-primary-action" id="btn-salvar-dom" style="white-space:nowrap;height:38px;">
-                <i class="fa-solid fa-floppy-disk"></i><span>Salvar</span>
-              </button>
+              <div style="display:flex;gap:0.5rem;">
+                <button class="btn-action btn-primary-action" id="btn-salvar-dom" style="white-space:nowrap;height:40px;">
+                  <i class="fa-solid fa-floppy-disk"></i> <span>Salvar Domínio</span>
+                </button>
+              </div>
             </div>
-            <div style="display:flex;gap:1.5rem;margin-top:1rem;font-size:0.78rem;color:var(--text-muted);">
-              <span><i class="fa-solid fa-circle-info"></i> Subdomínio: configure o DNS wildcard
-                <code>*.chefcozinha.com.br</code> → IP do servidor</span>
-              <span><i class="fa-solid fa-circle-info"></i> Domínio próprio: configure <code>CNAME</code> ou
-                <code>A</code> → IP do servidor</span>
+            <div id="dom-preview-banner" style="margin-top:1rem;padding:0.75rem 1rem;background:rgba(59,130,246,0.08);border:1px dashed rgba(59,130,246,0.3);border-radius:8px;font-size:0.82rem;color:var(--text-muted);display:none;">
+              <i class="fa-solid fa-compass" style="color:var(--info);margin-right:0.4rem;"></i>
+              <span>URL Resultante: <strong id="dom-preview-url-text" style="color:white;font-family:monospace;"></strong></span>
+            </div>
+            <div style="display:flex;gap:1.5rem;margin-top:1rem;font-size:0.78rem;color:var(--text-muted);flex-wrap:wrap;">
+              <span><i class="fa-solid fa-circle-info" style="color:var(--info);"></i> <strong>Subdomínio:</strong> configure DNS wildcard <code>*.[base_domain]</code> → IP do servidor</span>
+              <span><i class="fa-solid fa-circle-info" style="color:var(--warning);"></i> <strong>Domínio Próprio:</strong> cliente aponta <code>CNAME</code> ou <code>A</code> → IP do servidor</span>
             </div>
           </div>
 
           <!-- Tabela de domínios -->
           <div class="table-container">
-            <div class="table-controls">
-              <div class="search-bar">
+            <div class="table-controls" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.8rem;">
+              <div class="search-bar" style="flex:1;min-width:240px;">
                 <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="text" id="dom-search" placeholder="Buscar restaurante, slug ou domínio...">
+                <input type="text" id="dom-search" placeholder="Buscar por ID, restaurante, subdomínio ou domínio próprio...">
               </div>
-              <button class="btn-action btn-primary-action" id="btn-refresh-dom">
-                <i class="fa-solid fa-rotate"></i><span>Atualizar</span>
-              </button>
+              <div style="display:flex;gap:0.5rem;">
+                <button class="btn-action" id="btn-diagnostico-dom" title="Atualizar diagnóstico e rotas">
+                  <i class="fa-solid fa-stethoscope"></i> <span>Diagnóstico</span>
+                </button>
+                <button class="btn-action btn-primary-action" id="btn-refresh-dom">
+                  <i class="fa-solid fa-rotate"></i> <span>Atualizar Lista</span>
+                </button>
+              </div>
             </div>
             <div style="overflow-x:auto;">
               <table class="custom-table">
@@ -2192,16 +2273,17 @@
                     <th>ID</th>
                     <th>Restaurante</th>
                     <th>Subdomínio</th>
-                    <th>URL Completa</th>
+                    <th>URL do Subdomínio</th>
                     <th>Domínio Próprio</th>
                     <th>Status</th>
-                    <th>Ações</th>
+                    <th style="text-align:right;">Ações</th>
                   </tr>
                 </thead>
                 <tbody id="dom-tbody">
                   <tr>
-                    <td colspan="7" style="text-align:center;color:var(--text-muted);">Clique em Atualizar para
-                      carregar...</td>
+                    <td colspan="7" style="text-align:center;color:var(--text-muted);padding:2rem;">
+                      <i class="fa-solid fa-spinner fa-spin" style="margin-right:0.5rem;"></i> Carregando instâncias e domínios...
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -4964,6 +5046,25 @@
           </div>
           <div class="form-row">
             <div class="form-group">
+              <label>Subdomínio Exclusivo (Slug)</label>
+              <div style="display:flex;align-items:center;gap:0;">
+                <input type="text" id="new-rest-slug" placeholder="pizzaria-bella"
+                  style="width:100%;padding:0.6rem 0.8rem;background:rgba(0,0,0,0.25);border:1px solid var(--border-color);border-radius:8px 0 0 8px;color:white;font-size:0.9rem;">
+                <span id="wizard-base-suffix"
+                  style="padding:0.6rem 0.8rem;background:rgba(255,255,255,0.05);border:1px solid var(--border-color);border-left:none;border-radius:0 8px 8px 0;color:var(--text-muted);font-size:0.8rem;white-space:nowrap;">.chefcozinha.com.br</span>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Domínio Próprio (opcional)</label>
+              <input type="text" id="new-rest-custom-domain" placeholder="ex: cardapio.pizzaria.com.br">
+            </div>
+          </div>
+          <div id="wizard-domain-preview" style="margin-bottom:1rem;padding:0.6rem 0.9rem;background:rgba(16,185,129,0.08);border:1px dashed rgba(16,185,129,0.3);border-radius:8px;font-size:0.82rem;color:var(--text-muted);display:none;">
+            <i class="fa-solid fa-link" style="color:#34d399;margin-right:0.4rem;"></i>
+            <span>URL de acesso: <strong id="wizard-domain-preview-url" style="color:#34d399;font-family:monospace;"></strong></span>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
               <label>CNPJ</label>
               <input type="text" id="new-rest-cnpj" placeholder="00.000.000/0001-00">
             </div>
@@ -5127,6 +5228,101 @@
             <i class="fa-solid fa-rocket"></i> Criar Restaurante
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MODAL: NOVA INSTÂNCIA COM SUBDOMÍNIO ──────────────────────────────── -->
+  <div class="modal-overlay" id="modal-nova-instancia-dom">
+    <div class="modal-content" style="max-width:650px;">
+      <div class="modal-header">
+        <div style="display:flex;align-items:center;gap:0.6rem;">
+          <div style="width:36px;height:36px;border-radius:10px;background:rgba(252,75,21,0.15);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:1.1rem;">
+            <i class="fa-solid fa-server"></i>
+          </div>
+          <div>
+            <h3 style="margin:0;font-size:1.15rem;">Nova Instância com Subdomínio</h3>
+            <p style="margin:0;font-size:0.78rem;color:var(--text-muted);">Cria um novo tenant com banco SQLite próprio e rota exclusiva</p>
+          </div>
+        </div>
+        <button class="modal-close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Nome do Restaurante / Tenant *</label>
+          <input type="text" id="inst-nome" placeholder="Ex: Hamburgueria Artesanal Prime" autocomplete="off">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <label>Subdomínio Exclusivo (Slug) *</label>
+              <button type="button" id="btn-inst-gerar-slug" style="background:none;border:none;color:var(--primary);font-size:0.75rem;cursor:pointer;padding:0;text-decoration:underline;">
+                Auto-gerar
+              </button>
+            </div>
+            <div style="display:flex;align-items:center;gap:0;">
+              <input type="text" id="inst-slug" placeholder="hamburgueria-prime"
+                style="width:100%;padding:0.6rem 0.8rem;background:rgba(0,0,0,0.25);border:1px solid var(--border-color);border-radius:8px 0 0 8px;color:white;font-size:0.9rem;">
+              <span id="inst-base-suffix"
+                style="padding:0.6rem 0.8rem;background:rgba(255,255,255,0.05);border:1px solid var(--border-color);border-left:none;border-radius:0 8px 8px 0;color:var(--text-muted);font-size:0.8rem;white-space:nowrap;">.chefcozinha.com.br</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Domínio Próprio (opcional)</label>
+            <input type="text" id="inst-custom-domain" placeholder="ex: pedidos.hamburgueria.com.br">
+          </div>
+        </div>
+
+        <!-- Preview da URL da Instância -->
+        <div style="margin-bottom:1.2rem;padding:0.8rem 1rem;background:rgba(16,185,129,0.08);border:1px dashed rgba(16,185,129,0.3);border-radius:10px;">
+          <div style="font-size:0.75rem;text-transform:uppercase;color:#34d399;font-weight:600;margin-bottom:0.25rem;">
+            <i class="fa-solid fa-globe"></i> URL de Acesso Direto do Cliente:
+          </div>
+          <div id="inst-url-preview" style="font-size:0.95rem;font-family:monospace;color:white;word-break:break-all;font-weight:600;">
+            https://hamburgueria-prime.chefcozinha.com.br
+          </div>
+        </div>
+
+        <div style="background:rgba(0,0,0,0.2);border:1px solid var(--border-color);border-radius:10px;padding:1rem;margin-bottom:1.2rem;">
+          <h5 style="margin:0 0 0.8rem 0;color:white;font-size:0.88rem;"><i class="fa-solid fa-user-shield" style="color:var(--warning);"></i> Administrador Inicial do Tenant</h5>
+          <div class="form-row">
+            <div class="form-group">
+              <label style="font-size:0.8rem;">Email do Admin</label>
+              <input type="email" id="inst-admin-email" placeholder="admin@restaurante.com">
+            </div>
+            <div class="form-group">
+              <label style="font-size:0.8rem;">Senha do Admin</label>
+              <div style="position:relative;">
+                <input type="text" id="inst-admin-senha" value="admin123" style="padding-right:2.2rem;">
+                <button type="button" onclick="document.getElementById('inst-admin-senha').value=Math.random().toString(36).slice(-8);"
+                  title="Gerar senha aleatória"
+                  style="position:absolute;right:0.4rem;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.85rem;"><i class="fa-solid fa-dice"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Plano da Licença</label>
+            <select id="inst-plano" style="width:100%;padding:0.6rem 0.8rem;background:rgba(0,0,0,0.25);border:1px solid var(--border-color);border-radius:8px;color:white;font-size:0.9rem;">
+              <option value="premium" selected>Premium (Completo)</option>
+              <option value="pro">Pro</option>
+              <option value="trial">Trial (7 dias)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>WhatsApp / Telefone (opcional)</label>
+            <input type="text" id="inst-telefone" placeholder="(11) 99999-8888">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-action modal-close">Cancelar</button>
+        <button class="btn-action btn-primary-action" id="btn-salvar-nova-instancia-dom" style="background:linear-gradient(135deg,var(--primary),#ea580c);box-shadow:0 4px 12px rgba(252,75,21,0.35);">
+          <i class="fa-solid fa-rocket"></i> <span>Criar Instância & Provisionar Subdomínio</span>
+        </button>
       </div>
     </div>
   </div>

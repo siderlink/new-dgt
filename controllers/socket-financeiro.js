@@ -130,14 +130,17 @@ module.exports = function(socket, io, db, helpers) {
 
   socket.on('abrir_caixa', (data) => {
     const payload = (data && typeof data === 'object') ? data : {};
-    const fundo_troco = parseFloat(payload.fundo_troco) || 0;
+    const fundo_troco = parseFloat(String(payload.fundo_troco || '0').replace(',', '.')) || 0;
     const operador = payload.operador || 'Caixa';
+    const tid = socket.restaurante_id || 1;
     
-    console.log(`🔓 [CAIXA] Abertura de caixa solicitada: R$ ${fundo_troco.toFixed(2)} por ${operador}`);
+    console.log(`🔓 [CAIXA] Abertura de caixa solicitada: R$ ${fundo_troco.toFixed(2)} por ${operador} (Tenant: ${tid})`);
 
     checkCaixa(turnoAtual => {
       if (turnoAtual) {
         console.log(`✅ [CAIXA] Caixa já aberto (Turno ID: ${turnoAtual.id})`);
+        io.to(`restaurante_${tid}`).emit('estado_caixa', turnoAtual);
+        io.to(`restaurante_${tid}`).emit('caixa_aberto_sucesso');
         io.emit('estado_caixa', turnoAtual);
         io.emit('caixa_aberto_sucesso');
         socket.emit('estado_caixa', turnoAtual);
@@ -150,7 +153,7 @@ module.exports = function(socket, io, db, helpers) {
         [fundo_troco],
         function (err) {
           if (!err) {
-            const newTurno = { id: this.lastID, status: 'Aberto', fundo_troco };
+            const newTurno = { id: this.lastID, status: 'Aberto', fundo_troco, data_abertura: new Date().toISOString() };
             console.log(`🎉 [CAIXA ABERTO COM SUCESSO] Novo Turno ID: ${newTurno.id} | R$ ${fundo_troco.toFixed(2)} por ${operador}`);
             
             db.run(`UPDATE mesas SET status = 'Disponível', observacao = ''`, () => {});
@@ -162,11 +165,16 @@ module.exports = function(socket, io, db, helpers) {
               } catch (eAudit) {}
             }
             
+            io.to(`restaurante_${tid}`).emit('estado_caixa', newTurno);
+            io.to(`restaurante_${tid}`).emit('caixa_aberto_sucesso');
             io.emit('estado_caixa', newTurno);
             io.emit('caixa_aberto_sucesso');
             socket.emit('estado_caixa', newTurno);
             socket.emit('caixa_aberto_sucesso');
-            db.all(`SELECT * FROM mesas`, (e, r) => io.emit('mesas_atualizadas', r || []));
+            db.all(`SELECT * FROM mesas`, (e, r) => {
+              io.to(`restaurante_${tid}`).emit('mesas_atualizadas', r || []);
+              io.emit('mesas_atualizadas', r || []);
+            });
             if (typeof broadcastPedidos === 'function') broadcastPedidos();
           } else {
             console.error("❌ [ERRO AO ABRIR CAIXA]:", err);

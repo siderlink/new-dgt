@@ -16,7 +16,8 @@ window.adicionarCompMobile = function(catIndex, opcao) {
 };
 window.ChefPdvMobileSDK.adicionarCompMobile = window.adicionarCompMobile;
 
-﻿let socket;
+var socket = window.socket || (typeof io !== 'undefined' ? io({ query: { token: localStorage.getItem('chef_token'), restaurante_id: localStorage.getItem('restaurante_id') || '1' } }) : null);
+window.socket = socket;
 let mesasData = [];
 let produtosData = [];
 let categoriasData = [];

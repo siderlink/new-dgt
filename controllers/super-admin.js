@@ -303,25 +303,23 @@ module.exports = function (app, masterDb, sqlite3, options) {
         );
       }
 
-      // 5) Criar usuário admin/dono
+      // 5) Criar usuário admin/dono padrão
       let adminUserId = null;
-      const adminEmail = (body.email || '').trim();
-      const adminSenha = body.senha || '';
-      const adminNome = (body.admin_nome || '').trim();
+      const adminEmail = (body.email || '').trim() || 'admin@cheff.pro';
+      const adminSenha = body.senha || 'admin123';
+      const adminNome = (body.admin_nome || '').trim() || 'Administrador Cheff';
 
-      if (adminEmail && adminSenha) {
-        const hash = await bcrypt.hash(adminSenha, 10);
-        adminUserId = await new Promise((resolve, reject) => {
-          masterDb.run(
-            `INSERT INTO usuarios (restaurante_id, username, password_hash, role, ativo) VALUES (?, ?, ?, 'admin', 1)`,
-            [newId, adminEmail, hash],
-            function(err) { err ? reject(err) : resolve(this.lastID); }
-          );
-        }).catch((e) => {
-          alertas.push('Erro ao criar admin: ' + e.message);
-          return null;
-        });
-      }
+      const hash = await bcrypt.hash(adminSenha, 10);
+      adminUserId = await new Promise((resolve, reject) => {
+        masterDb.run(
+          `INSERT INTO usuarios (restaurante_id, username, password_hash, role, nome, ativo) VALUES (?, ?, ?, 'admin', ?, 1)`,
+          [newId, adminEmail, hash, adminNome],
+          function(err) { err ? reject(err) : resolve(this.lastID); }
+        );
+      }).catch((e) => {
+        alertas.push('Aviso ao registrar admin: ' + e.message);
+        return null;
+      });
 
       // 6) Criar funcionários iniciais
       const funcs = body.funcionarios_iniciais || [];
@@ -431,28 +429,33 @@ module.exports = function (app, masterDb, sqlite3, options) {
   // POST /api/super/criar-restaurante — cria novo restaurante (simples)
   app.post('/api/super/criar-restaurante', superAdminAuth, async (req, res) => {
     try {
-      const { nome, licenca, ativo, login_mode } = req.body;
+      const { nome, licenca, ativo, login_mode, slug, custom_domain } = req.body || {};
       if (!nome) return res.json({ ok: false, erro: 'Nome do restaurante é obrigatório.' });
 
       const activeVal = ativo !== undefined ? (ativo ? 1 : 0) : 1;
       const licencaVal = licenca || 'ativo';
       const modeVal = login_mode || 'multi';
+      const cleanSlug = (slug || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '') || null;
+      const cleanDom = (custom_domain || '').trim().toLowerCase() || null;
 
       masterDb.run(
-        `INSERT INTO restaurantes (nome, licenca, ativo, login_mode, data_cadastro) VALUES (?, ?, ?, ?, datetime('now','localtime'))`,
-        [nome, licencaVal, activeVal, modeVal],
-        function (err) {
+        `INSERT INTO restaurantes (nome, licenca, ativo, login_mode, slug, custom_domain, data_cadastro) VALUES (?, ?, ?, ?, ?, ?, datetime('now','localtime'))`,
+        [nome, licencaVal, activeVal, modeVal, cleanSlug, cleanDom],
+        async function (err) {
           if (err) return res.json({ ok: false, erro: err.message });
           const newId = this.lastID;
-          const tenantDbPath = getTenantDbPath(newId);
+          const tenantDbPath = path.join(__dirname, '..', `database_${newId}.sqlite`);
           if (!fsSync.existsSync(tenantDbPath)) {
             try {
               if (typeof options.createFreshTenantDb === 'function') {
-                options.createFreshTenantDb(tenantDbPath, nome).then(() => {});
+                await options.createFreshTenantDb(tenantDbPath, nome);
               }
             } catch (e) { }
           }
-          res.json({ ok: true, mensagem: 'Restaurante criado com sucesso!', id: newId });
+          if (typeof options.reloadDomainMaps === 'function') {
+            await options.reloadDomainMaps();
+          }
+          res.json({ ok: true, mensagem: 'Restaurante criado com sucesso!', id: newId, slug: cleanSlug, custom_domain: cleanDom });
         }
       );
     } catch (e) {
@@ -1679,10 +1682,36 @@ module.exports = function (app, masterDb, sqlite3, options) {
 
   // GET /api/super/dominios — lista domínios de todos os tenants
   app.get('/api/super/dominios', superAdminAuth, (req, res) => {
-    masterDb.all(`SELECT id, nome, slug, custom_domain, licenca, ativo FROM restaurantes ORDER BY id`, [], (err, rows) => {
-      if (err) return res.json({ ok: false, erro: err.message });
-      res.json({ ok: true, tenants: rows || [], baseDomain: options.baseDomain || 'chefcozinha.com.br' });
+    masterDb.get(`SELECT valor FROM config_sistema WHERE chave = 'base_domain'`, (errCfg, rowCfg) => {
+      const activeBaseDomain = (rowCfg && rowCfg.valor && rowCfg.valor.trim()) || options.baseDomain || 'chefcozinha.com.br';
+      masterDb.all(`SELECT id, nome, slug, custom_domain, licenca, ativo FROM restaurantes ORDER BY id`, [], (err, rows) => {
+        if (err) return res.json({ ok: false, erro: err.message });
+        res.json({ ok: true, tenants: rows || [], baseDomain: activeBaseDomain });
+      });
     });
+  });
+
+  // POST /api/super/dominios/base-domain — configura o domínio base da plataforma (ex: chefcozinha.com.br)
+  app.post('/api/super/dominios/base-domain', superAdminAuth, async (req, res) => {
+    const { base_domain } = req.body || {};
+    const cleanBase = (base_domain || '').trim().toLowerCase();
+    if (!cleanBase || cleanBase.length < 3) {
+      return res.json({ ok: false, erro: 'Domínio base inválido.' });
+    }
+    masterDb.run(
+      `INSERT INTO config_sistema (chave, valor) VALUES ('base_domain', ?) ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor`,
+      [cleanBase],
+      async function(err) {
+        if (err) return res.json({ ok: false, erro: err.message });
+        if (typeof options.setBaseDomain === 'function') {
+          options.setBaseDomain(cleanBase);
+        }
+        if (typeof options.reloadDomainMaps === 'function') {
+          await options.reloadDomainMaps();
+        }
+        res.json({ ok: true, mensagem: `Domínio base atualizado para "${cleanBase}" com sucesso!`, baseDomain: cleanBase });
+      }
+    );
   });
 
   // POST /api/super/dominios — define slug e/ou domínio próprio para um tenant
@@ -1693,7 +1722,7 @@ module.exports = function (app, masterDb, sqlite3, options) {
 
     try {
       const slug = (body.slug || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '');
-      const customDomain = (body.custom_domain || '').trim().toLowerCase();
+      const customDomain = (body.custom_domain || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
 
       // Valida slug
       if (body.slug !== undefined && slug !== '') {
@@ -1710,7 +1739,7 @@ module.exports = function (app, masterDb, sqlite3, options) {
       // Valida domínio próprio
       if (body.custom_domain !== undefined && customDomain !== '') {
         if (!/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/.test(customDomain)) {
-          return res.json({ ok: false, erro: 'Domínio inválido.' });
+          return res.json({ ok: false, erro: 'Domínio inválido. Ex: meurestaurante.com.br' });
         }
         const existingDom = await new Promise((resolve) => {
           masterDb.get(`SELECT id FROM restaurantes WHERE custom_domain = ? AND id != ?`, [customDomain, rid], (e, r) => resolve(e ? null : r));
@@ -1751,6 +1780,168 @@ module.exports = function (app, masterDb, sqlite3, options) {
         await options.reloadDomainMaps();
       }
       res.json({ ok: true, mensagem: 'Domínios removidos com sucesso!' });
+    } catch (e) {
+      res.json({ ok: false, erro: e.message });
+    }
+  });
+
+  // POST /api/super/dominios/criar-instancia — cria nova instância de tenant com subdomínio exclusivo
+  app.post('/api/super/dominios/criar-instancia', superAdminAuth, async (req, res) => {
+    try {
+      const body = req.body || {};
+      const nome = (body.nome || '').trim();
+      if (!nome) return res.json({ ok: false, erro: 'Nome do restaurante é obrigatório.' });
+
+      // Generate or clean slug
+      let slug = (body.slug || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '');
+      if (!slug) {
+        slug = nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30);
+      }
+      if (!slug || slug.length < 2) slug = 'instancia-' + Date.now().toString(36);
+
+      // Check unique slug
+      const existingSlug = await new Promise((resolve) => {
+        masterDb.get(`SELECT id, nome FROM restaurantes WHERE slug = ?`, [slug], (e, r) => resolve(e ? null : r));
+      });
+      if (existingSlug) {
+        return res.json({ ok: false, erro: `O subdomínio "${slug}" já está em uso pelo restaurante "${existingSlug.nome}" (ID ${existingSlug.id}). Escolha outro subdomínio.` });
+      }
+
+      const customDomain = (body.custom_domain || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '') || null;
+      if (customDomain) {
+        const existingDom = await new Promise((resolve) => {
+          masterDb.get(`SELECT id FROM restaurantes WHERE custom_domain = ?`, [customDomain], (e, r) => resolve(e ? null : r));
+        });
+        if (existingDom) return res.json({ ok: false, erro: `O domínio próprio "${customDomain}" já está em uso por outro restaurante.` });
+      }
+
+      const licencaVal = (body.licenca || 'premium').trim().toLowerCase();
+      const activeVal = body.ativo !== undefined ? (body.ativo ? 1 : 0) : 1;
+      const modeVal = body.login_mode || 'multi';
+
+      // 1. Criar restaurante no masterDb
+      const newId = await new Promise((resolve, reject) => {
+        masterDb.run(
+          `INSERT INTO restaurantes (nome, licenca, ativo, login_mode, slug, custom_domain, data_cadastro)
+           VALUES (?, ?, ?, ?, ?, ?, datetime('now','localtime'))`,
+          [nome, licencaVal, activeVal, modeVal, slug, customDomain],
+          function(err) { err ? reject(err) : resolve(this.lastID); }
+        );
+      });
+
+      // 2. Criar banco do tenant com schema inicial
+      const tenantDbPath = path.join(__dirname, '..', `database_${newId}.sqlite`);
+      if (!fsSync.existsSync(tenantDbPath)) {
+        try {
+          if (typeof options.createFreshTenantDb === 'function') {
+            await options.createFreshTenantDb(tenantDbPath, nome);
+          }
+        } catch (eDb) {
+          console.error('[Criar Instancia] Erro ao criar banco:', eDb);
+        }
+      }
+
+      // 3. Criar usuário admin do tenant
+      const adminEmail = (body.admin_email || body.email || '').trim() || `admin@${slug}.local`;
+      const adminSenha = body.admin_senha || body.senha || 'admin123';
+      const adminNome = (body.admin_nome || '').trim() || `Admin ${nome}`;
+      const hash = await bcrypt.hash(adminSenha, 10);
+
+      await new Promise((resolve, reject) => {
+        masterDb.run(
+          `INSERT INTO usuarios (restaurante_id, username, password_hash, role, nome, ativo) VALUES (?, ?, ?, 'admin', ?, 1)`,
+          [newId, adminEmail, hash, adminNome],
+          function(err) { err ? reject(err) : resolve(this.lastID); }
+        );
+      }).catch((e) => console.warn('[Criar Instancia] Aviso ao criar admin:', e.message));
+
+      // 4. Salvar configurações no banco do tenant
+      try {
+        const tenantDb = await new Promise((resolve, reject) => {
+          const db = new sqlite3.Database(tenantDbPath, (err) => err ? reject(err) : resolve(db));
+        });
+        await new Promise((resolve) => {
+          tenantDb.serialize(() => {
+            tenantDb.run(`CREATE TABLE IF NOT EXISTS configuracoes (chave TEXT PRIMARY KEY, valor TEXT)`, () => {});
+            tenantDb.run(`INSERT OR REPLACE INTO configuracoes (chave, valor) VALUES ('empresa_nome', ?)`, [nome], () => {});
+            tenantDb.run(`INSERT OR REPLACE INTO configuracoes (chave, valor) VALUES ('slug', ?)`, [slug], () => {});
+            if (body.telefone) tenantDb.run(`INSERT OR REPLACE INTO configuracoes (chave, valor) VALUES ('telefone', ?)`, [body.telefone], () => {});
+            if (body.whatsapp) tenantDb.run(`INSERT OR REPLACE INTO configuracoes (chave, valor) VALUES ('whatsapp', ?)`, [body.whatsapp], () => {});
+            tenantDb.close(() => resolve());
+          });
+        });
+      } catch (eCfg) {
+        console.warn('[Criar Instancia] Erro ao gravar config:', eCfg.message);
+      }
+
+      // 5. Recarregar mapas de domínio no servidor
+      if (typeof options.reloadDomainMaps === 'function') {
+        await options.reloadDomainMaps();
+      }
+
+      // 6. Obter domínio base atual
+      const activeBaseDomain = await new Promise((resolve) => {
+        masterDb.get(`SELECT valor FROM config_sistema WHERE chave = 'base_domain'`, (e, r) => {
+          resolve((r && r.valor && r.valor.trim()) || options.baseDomain || 'chefcozinha.com.br');
+        });
+      });
+
+      const subdomainUrl = `https://${slug}.${activeBaseDomain}`;
+      const customUrl = customDomain ? `https://${customDomain}` : null;
+
+      res.json({
+        ok: true,
+        mensagem: `Nova instância de tenant "${nome}" criada com sucesso no subdomínio ${slug}!`,
+        id: newId,
+        nome,
+        slug,
+        custom_domain: customDomain,
+        subdomain_url: subdomainUrl,
+        custom_url: customUrl,
+        admin: {
+          email: adminEmail,
+          senha: adminSenha,
+          nome: adminNome
+        }
+      });
+    } catch (e) {
+      res.json({ ok: false, erro: e.message });
+    }
+  });
+
+  // GET /api/super/dominios/diagnostico — diagnóstico completo de domínios e métricas
+  app.get('/api/super/dominios/diagnostico', superAdminAuth, async (req, res) => {
+    try {
+      const activeBaseDomain = await new Promise((resolve) => {
+        masterDb.get(`SELECT valor FROM config_sistema WHERE chave = 'base_domain'`, (e, r) => {
+          resolve((r && r.valor && r.valor.trim()) || options.baseDomain || 'chefcozinha.com.br');
+        });
+      });
+
+      const rows = await new Promise((resolve) => {
+        masterDb.all(`SELECT id, nome, slug, custom_domain, licenca, ativo, data_cadastro FROM restaurantes ORDER BY id`, [], (e, r) => resolve(r || []));
+      });
+
+      const totalInstancias = rows.length;
+      const comSubdominio = rows.filter(r => r.slug && r.slug.trim()).length;
+      const comDominioProprio = rows.filter(r => r.custom_domain && r.custom_domain.trim()).length;
+      const semDominio = rows.filter(r => (!r.slug || !r.slug.trim()) && (!r.custom_domain || !r.custom_domain.trim())).length;
+
+      res.json({
+        ok: true,
+        baseDomain: activeBaseDomain,
+        metricas: {
+          total_instancias: totalInstancias,
+          com_subdominio: comSubdominio,
+          com_dominio_proprio: comDominioProprio,
+          sem_dominio: semDominio
+        },
+        instancias: rows.map(r => ({
+          ...r,
+          subdomain_url: r.slug ? `https://${r.slug}.${activeBaseDomain}` : null,
+          custom_url: r.custom_domain ? `https://${r.custom_domain}` : null
+        }))
+      });
     } catch (e) {
       res.json({ ok: false, erro: e.message });
     }

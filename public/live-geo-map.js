@@ -695,9 +695,9 @@
 
   LiveGeoMap.prototype.connectSocket = function () {
     var self = this;
-    if (typeof io === 'undefined') return;
+    var socket = window.superAdminSocket || window.socket || (typeof io !== 'undefined' ? io() : null);
+    if (!socket || typeof socket.on !== 'function') return;
 
-    var socket = window.superAdminSocket || io();
     socket.on('geo_traffic_hit', function (hit) {
       self.onNewHit(hit);
     });

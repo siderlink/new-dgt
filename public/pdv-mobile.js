@@ -1,4 +1,23 @@
-﻿let socket;
+
+// ─── SDK / EXTENSÕES PARA CRIAÇÃO DE MÓDULOS DE SUPORTE ───────────────────
+window.ChefPdvMobileSDK = window.ChefPdvMobileSDK || {};
+window.ChefPdvMobileSDK.sectorIcons = {
+  'Todos': 'ph-stack',
+  'Cozinha 1': 'ph-cooking-pot',
+  'Cozinha 2': 'ph-cooking-pot',
+  'Bar': 'ph-wine'
+};
+
+window.adicionarCompMobile = function(catIndex, opcao) {
+  if (typeof catIndex === 'number' && opcao && window._mobileMontavelConfig && window._mobileMontavelConfig.categorias[catIndex]) {
+    window._mobileMontavelConfig.categorias[catIndex].opcoes.push(opcao);
+    if (typeof window.renderMontavelModal === 'function') window.renderMontavelModal();
+  }
+};
+window.ChefPdvMobileSDK.adicionarCompMobile = window.adicionarCompMobile;
+
+var socket = window.socket || (typeof io !== 'undefined' ? io({ query: { token: localStorage.getItem('chef_token'), restaurante_id: localStorage.getItem('restaurante_id') || '1' } }) : null);
+window.socket = socket;
 let mesasData = [];
 let produtosData = [];
 let categoriasData = [];
@@ -36,20 +55,36 @@ function initSocket() {
 
   socket.on('erro_servidor', (msg) => showToast(msg, 'error'));
 
-  socket.on('update_ponto_token', (data) => {
-      _pontoUrlMobile = data && data.url ? data.url : '';
-      renderQrPontoMobile();
-    });
-    socket.on('connect', () => {
+  socket.on('connect', () => {
     socket.emit('registrar_sessao', { nome: 'Caixa Mobile', cargo: 'Operador' });
     socket.emit('get_mesas');
     socket.emit('get_produtos');
     socket.emit('get_formas_pagamento');
     socket.emit('get_pedidos');
+    const _serialTotem = localStorage.getItem('cc_serial_dispositivo') || '';
+    if (_serialTotem) socket.emit('get_modo_dispositivo', { serial: _serialTotem });
+  });
+
+  // Modo Totem remoto: este terminal pode virar quiosque pelo painel do dono
+  socket.on('modo_dispositivo', (data) => {
+    const modo = data && data.modo;
+    if (!modo || modo === 'normal') return;
+    const rid = encodeURIComponent(localStorage.getItem('restaurante_id') || '1');
+    const rot = modo === 'totem_invertido' ? '&rot=180' : '';
+    window.location.href = `/cardapio.html?restaurante_id=${rid}&mesa=Totem&totem=1${rot}`;
   });
 
   socket.on('mesas_atualizadas', (mesas) => {
     mesasData = mesas;
+    renderMesas();
+  });
+
+  /* Delta: servidor envia apenas a mesa que mudou (otimização de rede) */
+  socket.on('mesa_delta', (mesa) => {
+    if (!mesa || !Array.isArray(mesasData)) return;
+    const idx = mesasData.findIndex(m => m.id === mesa.id || m.nome === mesa.nome);
+    if (idx === -1) { socket.emit('get_mesas'); return; }
+    mesasData[idx] = { ...mesasData[idx], ...mesa };
     renderMesas();
   });
 
@@ -71,6 +106,29 @@ function initSocket() {
     renderMesas();
     renderComanda();
   });
+
+  // Notificação em tempo real quando o caixa registra pagamento parcial (vice-versa)
+  socket.on('pagamento_parcial_registrado', (data) => {
+    if (!data || !data.mesaName) return;
+    const isSelf = !!(data.originSocket && socket.id && data.originSocket === socket.id);
+    if (isSelf) return;
+    const valor = (typeof data.valor === 'number' ? data.valor : parseFloat(String(data.valor).replace(',', '.'))) || 0;
+    const origemSplit = data.origem === 'split';
+    const msg = origemSplit
+      ? `✨ ${data.userName || 'Cliente'} separou a conta e pagou R$ ${valor.toFixed(2).replace('.', ',')} (${data.metodo || ''}) na ${data.mesaName}${data.excedenteTipo === 'gorjeta' ? ' + gorjeta' : ''}`
+      : `💰 Pgto Parcial de R$ ${valor.toFixed(2).replace('.', ',')} (${data.metodo || ''}) na ${data.mesaName}`;
+    showToast(msg, '#22c55e');
+    if ('Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification(`${origemSplit ? '✨ Separar Conta' : '💰 Pagamento Parcial'} — ${data.mesaName}`, { body: `${msg}`, icon: '/icons/icon.ico' });
+      } catch (e) { }
+    }
+  });
+
+  socket.on('split_token_criado', (d) => {
+    if (window._splitQrCallback) { const cb = window._splitQrCallback; window._splitQrCallback = null; cb(d); }
+  });
+  socket.on('split_erro', (e) => showToast((e && e.msg) || 'Erro ao gerar o QR de separação.', 'error'));
 
   socket.on('formas_pagamento_atualizadas', (formas) => {
     if (Array.isArray(formas)) {
@@ -361,8 +419,6 @@ function renderComanda() {
     'Em espera': 'Em preparo', 'Pendente': 'Em preparo',
   };
 
-  const sectorIcons = { 'Todos': 'ph-stack', 'Cozinha 1': 'ph-cooking-pot', 'Cozinha 2': 'ph-cooking-pot', 'Bar': 'ph-wine' };
-
   let itemsHtml = filtered.length === 0
     ? `<div style="text-align:center;padding:40px 16px;color:var(--text-muted);">
         <i class="ph ph-check-circle" style="font-size:40px;color:#22c55e;margin-bottom:12px;display:block;"></i>
@@ -609,7 +665,7 @@ function renderProdutos() {
   const container = document.getElementById('produtos-container');
   if (!container) return;
 
-  let filtered = produtosData;
+  let filtered = produtosData.filter(p => p.visibilidade !== 'invisivel');
   if (activeCategoria !== 'all') {
     filtered = filtered.filter(p => p.categoria === activeCategoria);
   }
@@ -651,13 +707,83 @@ window.adicionarProduto = (id) => {
 
   selectedProduto = prod;
   selectedQtd = 1;
+  window._compsMobile = [];
+  _mobileMontavelConfig = null;
 
   document.getElementById('modal-produto-nome').textContent = prod.nome;
   document.getElementById('modal-produto-preco').textContent = `R$ ${prod.preco.toFixed(2).replace('.', ',')}`;
   document.getElementById('modal-produto-qtd').textContent = selectedQtd;
   document.getElementById('modal-produto-obs').value = '';
+
+  const compsSection = document.getElementById('modal-produto-comps-section');
+  if (compsSection) compsSection.style.display = 'none';
   document.getElementById('modal-produto').classList.add('active');
+
+  fetch('/api/montaveis/produto/' + prod.id, { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('chef_token') || '') } })
+    .then(r => r.json())
+    .then(cfg => { if (cfg && cfg.id) { _mobileMontavelConfig = cfg; window.renderMobileMontavelUI(); } })
+    .catch(() => {});
 };
+
+window.renderMobileMontavelUI = () => {
+  const section = document.getElementById('modal-produto-comps-section');
+  const catsContainer = document.getElementById('modal-produto-montavel-cats');
+  const precoEl = document.getElementById('modal-produto-montavel-preco');
+  const hiddenInput = document.getElementById('modal-produto-composicoes-json');
+  if (!section || !_mobileMontavelConfig) { if (section) section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  window._compsMobile = _mobileMontavelConfig.categorias.map(() => []);
+
+  catsContainer.innerHTML = _mobileMontavelConfig.categorias.map((cat, ci) => {
+    const isSingle = cat.max_escolhas === 1;
+    const optsHtml = cat.opcoes.map((opt, oi) => {
+      const inputType = isSingle ? 'radio' : 'checkbox';
+      const inputName = 'mmontavel-' + ci;
+      return '<label style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:white;border:1px solid #e2e8f0;border-radius:6px;cursor:pointer;font-size:12px;">' +
+        '<input type="' + inputType + '" name="' + inputName + '" value="' + oi + '" onchange="window.onMobileMontavelSelect(' + ci + ',' + oi + ',' + isSingle + ')">' +
+        '<span style="flex:1;">' + opt.nome + '</span>' +
+        (opt.preco > 0 ? '<span style="color:#3b82f6;font-weight:700;font-size:11px;">+R$' + opt.preco.toFixed(2).replace('.', ',') + '</span>' : '') +
+        '</label>';
+    }).join('');
+
+    return '<div style="margin-bottom:8px;">' +
+      '<div style="font-size:11px;font-weight:700;color:#475569;margin-bottom:3px;">' + cat.nome +
+      (cat.obrigatoria ? ' <span style="color:#dc2626;">*</span>' : '') +
+      (cat.max_escolhas > 1 ? ' <span style="color:#94a3b8;font-weight:400;">(até ' + cat.max_escolhas + ')</span>' : '') +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:3px;">' + optsHtml + '</div>' +
+      '</div>';
+  }).join('');
+
+  updateMobileMontavelPrice();
+  if (hiddenInput) hiddenInput.value = JSON.stringify(window._compsMobile);
+};
+
+window.onMobileMontavelSelect = (catIdx, optIdx, isSingle) => {
+  if (isSingle) { window._compsMobile[catIdx] = [optIdx]; }
+  else {
+    const arr = window._compsMobile[catIdx];
+    const pos = arr.indexOf(optIdx);
+    if (pos >= 0) arr.splice(pos, 1);
+    else { const max = _mobileMontavelConfig.categorias[catIdx].max_escolhas || 1; if (arr.length < max) arr.push(optIdx); }
+  }
+  updateMobileMontavelPrice();
+  const hiddenInput = document.getElementById('modal-produto-composicoes-json');
+  if (hiddenInput) hiddenInput.value = JSON.stringify(window._compsMobile);
+};
+
+function updateMobileMontavelPrice() {
+  const precoEl = document.getElementById('modal-produto-montavel-preco');
+  if (!precoEl || !_mobileMontavelConfig || !selectedProduto) return;
+  let total = _mobileMontavelConfig.pricing_model === 'fixo' ? _mobileMontavelConfig.preco_fixo : selectedProduto.preco;
+  if (_mobileMontavelConfig.pricing_model === 'soma') {
+    _mobileMontavelConfig.categorias.forEach((cat, ci) => {
+      (window._compsMobile[ci] || []).forEach(oi => { if (cat.opcoes[oi]) total += cat.opcoes[oi].preco || 0; });
+    });
+  }
+  precoEl.textContent = 'Total: R$ ' + (total * selectedQtd).toFixed(2).replace('.', ',');
+  precoEl.dataset.unitPrice = total;
+}
 
 window.fecharModalProduto = (e) => {
   if (e && e.target !== e.currentTarget) return;
@@ -678,22 +804,51 @@ window.confirmarAdicionarProduto = () => {
   if (!selectedProduto || !currentMesa) return;
 
   const obs = document.getElementById('modal-produto-obs').value.trim();
+  const rawComps = JSON.parse(document.getElementById('modal-produto-composicoes-json') ? (document.getElementById('modal-produto-composicoes-json').value || '[]') : '[]');
 
-  socket.emit('novo_pedido', {
+  let composicoes = [];
+  let unitPrice = selectedProduto.preco;
+
+  if (_mobileMontavelConfig) {
+    _mobileMontavelConfig.categorias.forEach((cat, ci) => {
+      (rawComps[ci] || []).forEach(oi => {
+        const opt = cat.opcoes[oi];
+        if (opt) composicoes.push({ categoria: cat.nome, opcao: opt.nome, preco: opt.preco || 0 });
+      });
+    });
+    const precoEl = document.getElementById('modal-produto-montavel-preco');
+    unitPrice = precoEl && precoEl.dataset.unitPrice ? parseFloat(precoEl.dataset.unitPrice) : unitPrice;
+  } else {
+    composicoes = rawComps;
+  }
+
+  const pedidoMobile = {
     productName: selectedProduto.nome,
     productEmoji: selectedProduto.emoji || '',
     quantity: selectedQtd,
     time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
     localName: currentMesa,
     userName: 'Caixa Mobile',
-    total: (selectedProduto.preco * selectedQtd).toFixed(2).replace('.', ','),
+    total: (unitPrice * selectedQtd).toFixed(2).replace('.', ','),
     status: 'Recebido',
     status_inicial: selectedProduto.status_inicial || 'Em espera',
     sector: selectedProduto.setor || 'Cozinha 1',
     mesa_comanda: currentMesa,
-    obs: obs
-  });
+    observations: obs,
+    composicoes: composicoes
+  };
+  /* Offline-first (upsell): sem internet, grava no dispositivo e sincroniza depois */
+  if (window.ChefOfflineQueue && window.ChefOfflineQueue.habilitado() && !navigator.onLine) {
+    window.ChefOfflineQueue.add(pedidoMobile).then(() => {
+      window.ChefOfflineQueue.agendarSyncNativo();
+      alert('📶 Sem internet — item salvo e será enviado sozinho.');
+    }).catch(() => {});
+  } else {
+    socket.emit('novo_pedido', pedidoMobile);
+  }
 
+  window._compsMobile = [];
+  _mobileMontavelConfig = null;
   showToast(`${selectedQtd}x ${selectedProduto.nome} lancado!`, 'success');
   fecharModalProduto();
 };
@@ -890,6 +1045,35 @@ function setupBottomNav() {
       }
     });
   });
+
+  // ── Swipe lateral para trocar de aba (mesma lógica do Garçom Mobile) ──
+  const ordemViews = ['view-mesas', 'view-cardapio', 'view-comanda', 'view-estoque', 'view-mais'];
+  let swipeX = 0, swipeY = 0, swipeAtivo = false;
+  document.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    if (e.target.closest('input, textarea, select, .modal-overlay, #modal-divisao')) return;
+    swipeX = e.touches[0].clientX;
+    swipeY = e.touches[0].clientY;
+    swipeAtivo = true;
+  }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    if (!swipeAtivo) return;
+    swipeAtivo = false;
+    const dx = e.changedTouches[0].clientX - swipeX;
+    const dy = e.changedTouches[0].clientY - swipeY;
+    if (Math.abs(dx) < 70 || Math.abs(dy) > 50) return;
+    const atual = document.querySelector('.view-section.active');
+    if (!atual) return;
+    const idx = ordemViews.indexOf(atual.id);
+    if (idx === -1) return;
+    const proximo = dx < 0 ? idx + 1 : idx - 1; // esquerda avança, direita volta
+    if (proximo < 0 || proximo >= ordemViews.length) return;
+    const alvo = document.querySelector(`.nav-item[data-target="${ordemViews[proximo]}"]`);
+    if (alvo) {
+      if (navigator.vibrate) { try { navigator.vibrate(8); } catch (err) {} }
+      alvo.click();
+    }
+  }, { passive: true });
 }
 
 function mostrarSelecaoSetor() {
@@ -953,6 +1137,37 @@ window.voltarSelecaoSetor = () => {
   mostrarSelecaoSetor();
 };
 
+// ─── QR DO PONTO (MODO ESPERA) ──────────────────────────────────────────────
+// O servidor envia 'update_ponto_token' ao conectar. O modal fica expandido
+// até a primeira interação (toque/clique/1px de mouse) — lógica no fullscreen.js
+let _pontoUrlMobile = '';
+
+function renderQrPontoMobile() {
+  const img = document.getElementById('qr-ponto-img-zoomed');
+  if (!img) return;
+  if (!_pontoUrlMobile) {
+    img.alt = 'Aguardando QR do ponto...';
+    return;
+  }
+  img.alt = 'QR Ponto Ampliado';
+  img.src = (window.location.origin || '') + '/api/qr?size=340&data=' + encodeURIComponent(_pontoUrlMobile);
+}
+
+if (typeof socket !== 'undefined' && socket) {
+      socket.on('update_ponto_token', (data) => {
+        _pontoUrlMobile = data && data.url ? data.url : '';
+        renderQrPontoMobile();
+      });
+    }
+
+window.abrirZoomQrPontoMobile = function () {
+  const modal = document.getElementById('modal-zoom-qr-ponto');
+  if (!modal) return;
+  renderQrPontoMobile();
+  modal.style.display = 'flex';
+  if (window.chefModoEsperaArmar) window.chefModoEsperaArmar('modal-zoom-qr-ponto', 500);
+};
+
 
   // ─── MODAL DE DETALHES DOS ITENS DA MESA (PDV MOBILE) ───
   window.abrirModalItensMesa = function (nomeMesa) {
@@ -1002,7 +1217,10 @@ window.voltarSelecaoSetor = () => {
           `}
         </div>
 
-        <div style="padding:16px 20px; background:#f8fafc; border-top:1px solid #e2e8f0;">
+<div style="padding:16px 20px; background:#f8fafc; border-top:1px solid #e2e8f0;">
+          <button onclick="window.abrirModalQrSepararConta('${nomeMesa}')" style="width:100%; padding:11px; margin-bottom:8px; background:#f3e8ff; color:#6d28d9; border:1px dashed #c4b5fd; border-radius:12px; font-weight:800; font-size:12.5px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px;">
+            <i class="ph-bold ph-qr-code" style="font-size:16px;"></i> QR: Clientes separam a conta
+          </button>
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
             <span style="font-size:14px; font-weight:700; color:#64748b;">Total com Taxa:</span>
             <strong style="font-size:20px; font-weight:900; color:#10b981;">R$ ${total.toFixed(2).replace('.', ',')}</strong>
@@ -1029,7 +1247,76 @@ window.voltarSelecaoSetor = () => {
     if (navCardapio) navCardapio.click();
   };
 
-  // ─── CONTEXT MENU & LONG PRESS (PDV MOBILE) ───
+// ── SEPARAR CONTA (CLIENTES PAGAM PELO QR) ──
+  window.abrirModalQrSepararConta = function (nomeMesa) {
+    if (!nomeMesa) return showToast('Selecione uma mesa primeiro.', 'error');
+
+    let modal = document.getElementById('modal-qr-separar-conta-pdv-mobile');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'modal-qr-separar-conta-pdv-mobile';
+      modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(6px); z-index:999999; display:flex; align-items:center; justify-content:center; animation:fadeIn 0.2s ease;';
+      modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
+      document.body.appendChild(modal);
+    }
+
+    modal.innerHTML = `
+      <div style="position:relative; background:#ffffff; border-radius:24px; padding:24px 20px; max-width:360px; width:90%; text-align:center; box-shadow:0 20px 50px rgba(0,0,0,0.3); border:1px solid #e2e8f0; color:#0f172a;">
+        <button type="button" onclick="document.getElementById('modal-qr-separar-conta-pdv-mobile').style.display='none'" style="position:absolute; top:10px; right:10px; background:#f1f5f9; border:none; width:32px; height:32px; border-radius:50%; font-size:18px; color:#64748b; cursor:pointer;">&times;</button>
+        <div style="display:flex; align-items:center; gap:8px; justify-content:center; margin-bottom:8px;">
+          <i class="ph-bold ph-qr-code" style="color:#fc4b15; font-size:24px;"></i>
+          <h3 style="margin:0; font-size:18px; font-weight:800; color:#0f172a;">Separar Conta</h3>
+        </div>
+        <p style="font-size:13px; color:#64748b; margin:0 0 6px;">Mesa <b style="color:#0f172a;">${nomeMesa}</b></p>
+        <p style="font-size:12.5px; color:#64748b; margin:0 0 14px;">Cada cliente aponta a câmera, escolhe seus itens e faz o pagamento parcial sozinho.</p>
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:18px; padding:16px; margin:12px 0; display:flex; justify-content:center; align-items:center; min-height:230px;">
+          <img id="split-qr-img" src="" alt="QR Separar Conta" style="width:220px; height:220px; border-radius:8px; display:block;">
+        </div>
+        <p id="split-qr-status" style="font-size:12.5px; color:#64748b; margin:6px 0 14px 0;">Gerando QR Code...</p>
+        <div style="display:flex; gap:8px;">
+          <button onclick="window.copiarLinkSplitConta()" id="btn-split-copiar" style="flex:1; padding:12px; border-radius:12px; background:#f1f5f9; border:1px solid #cbd5e1; font-weight:700; font-size:13px; cursor:pointer; color:#0f172a;" disabled>Copiar Link</button>
+          <button onclick="window.abrirLinkSplitConta()" id="btn-split-abrir" style="flex:1; padding:12px; border-radius:12px; background:#fc4b15; border:none; color:white; font-weight:800; font-size:13px; cursor:pointer;" disabled>Abrir</button>
+        </div>
+      </div>
+    `;
+    modal.style.display = 'flex';
+
+    window._splitUrlAtual = null;
+    window._splitQrCallback = (d) => {
+      if (!d || !d.success) return;
+      const rid = encodeURIComponent(localStorage.getItem('restaurante_id') || '1');
+      const url = `${window.location.protocol}//${window.location.host}/separar-conta.html?restaurante_id=${rid}&token=${encodeURIComponent(d.token)}`;
+      window._splitUrlAtual = url;
+      const status = document.getElementById('split-qr-status');
+      const qrImg = document.getElementById('split-qr-img');
+      if (status) status.innerText = 'Mantenha o QR na tela. Cada cliente lê e separa os itens dele.';
+      if (typeof window.qrImg === 'function') {
+        window.qrImg(qrImg, url, 240);
+      } else {
+        qrImg.src = (window.location.origin || '') + '/api/qr?size=240&data=' + encodeURIComponent(url);
+      }
+      const bt = document.getElementById('btn-split-copiar');
+      const ba = document.getElementById('btn-split-abrir');
+      if (bt) { bt.disabled = false; bt.onclick = () => window.copiarLinkSplitConta(); }
+      if (ba) { ba.disabled = false; ba.onclick = () => window.abrirLinkSplitConta(); }
+    };
+
+    if (socket) socket.emit('criar_split_mesa', { mesa: nomeMesa });
+  };
+
+  window.copiarLinkSplitConta = function () {
+    const url = window._splitUrlAtual;
+    if (!url) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(() => showToast('Link copiado!', 'success')).catch(() => prompt('Link de separação:', url));
+    } else {
+      prompt('Link de separação:', url);
+    }
+  };
+  window.abrirLinkSplitConta = function () {
+    if (window._splitUrlAtual) window.open(window._splitUrlAtual, '_blank');
+  };
+
   window.abrirContextMenuPdvMobile = function (e, nomeMesa) {
     if (e && e.preventDefault) e.preventDefault();
     const x = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : 150);
@@ -1051,8 +1338,11 @@ window.voltarSelecaoSetor = () => {
       <button onclick="window.abrirCardapioComMesa('${nomeMesa}')" style="display:flex; align-items:center; gap:8px; padding:10px 12px; border:none; background:transparent; font-size:13px; font-weight:700; color:#0f172a; cursor:pointer; border-radius:8px; text-align:left;">
         <i class="ph-bold ph-plus-circle" style="color:#6366f1; font-size:16px;"></i> Lançar Itens
       </button>
-      <button onclick="window.abrirModalPagamentoParcial('${nomeMesa}')" style="display:flex; align-items:center; gap:8px; padding:10px 12px; border:none; background:transparent; font-size:13px; font-weight:700; color:#0f172a; cursor:pointer; border-radius:8px; text-align:left;">
+<button onclick="window.abrirModalPagamentoParcial('${nomeMesa}')" style="display:flex; align-items:center; gap:8px; padding:10px 12px; border:none; background:transparent; font-size:13px; font-weight:700; color:#0f172a; cursor:pointer; border-radius:8px; text-align:left;">
         <i class="ph-bold ph-currency-dollar" style="color:#10b981; font-size:16px;"></i> Pagamento Parcial
+      </button>
+      <button onclick="window.abrirModalQrSepararConta('${nomeMesa}')" style="display:flex; align-items:center; gap:8px; padding:10px 12px; border:none; background:transparent; font-size:13px; font-weight:700; color:#0f172a; cursor:pointer; border-radius:8px; text-align:left;">
+        <i class="ph-bold ph-qr-code" style="color:#8b5cf6; font-size:16px;"></i> Clientes separam a conta (QR)
       </button>
       <button onclick="window.abrirCheckoutMesa('${nomeMesa}')" style="display:flex; align-items:center; gap:8px; padding:10px 12px; border:none; background:transparent; font-size:13px; font-weight:700; color:#0f172a; cursor:pointer; border-radius:8px; text-align:left;">
         <i class="ph-bold ph-check-circle" style="color:#10b981; font-size:16px;"></i> Fechar Conta

@@ -76,11 +76,14 @@
 })();
 
 // Registrar auditoria de navegação de páginas automaticamente
-if (typeof socket !== 'undefined' && socket.emit) {
-  const currentPath = window.location.pathname || 'index.html';
-  const pageTitle = document.title || 'Módulo do Sistema';
-  socket.emit('registrar_acesso_pagina', { pagina: currentPath, titulo: pageTitle, autorizado: true });
-}
+try {
+  const s = (typeof socket !== 'undefined' && socket) || (typeof window !== 'undefined' && window.socket);
+  if (s && typeof s.emit === 'function') {
+    const currentPath = window.location.pathname || 'index.html';
+    const pageTitle = document.title || 'Módulo do Sistema';
+    s.emit('registrar_acesso_pagina', { pagina: currentPath, titulo: pageTitle, autorizado: true });
+  }
+} catch (e) {}
 
 
 // Ouvinte global para forçar logout de todos os funcionários quando o restaurante é deslogado

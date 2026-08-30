@@ -1486,286 +1486,307 @@
 
   <main>
 
-    <!-- Filtros de Período -->
-    <div>
-      <div class="sec-title">
-        <i class="ph-bold ph-calendar"></i>
-        <span>Período: <span id="periodo-rotulo-exibicao" style="color: var(--green);">Hoje</span></span>
+    <!-- 1. Filtros de Período & Configurações de Layout -->
+    <div id="sec-periodo" class="dono-section dono-sec-full sec-periodo-wrap">
+      <div class="sec-header-row">
+        <div class="sec-title">
+          <i class="ph-bold ph-calendar"></i>
+          <span>Período: <span id="periodo-rotulo-exibicao" style="color: var(--green);">Hoje</span></span>
+        </div>
+        <span class="sec-collapsed-badge">Oculto</span>
       </div>
-      <div class="periodo-row">
-        <button class="btn-periodo active" onclick="selecionarPeriodoDono('hoje', this)">
-          <i class="ph-bold ph-sun"></i> Hoje
-        </button>
-        <button class="btn-periodo" onclick="selecionarPeriodoDono('semana', this)">
-          <i class="ph-bold ph-calendar-blank"></i> Semana
-        </button>
-        <button class="btn-periodo" onclick="selecionarPeriodoDono('mes', this)">
-          <i class="ph-bold ph-calendar-plus"></i> Mês
-        </button>
-        <button class="btn-periodo" onclick="togglePeriodoCustomDono(this)">
-          <i class="ph-bold ph-funnel"></i> Outro
-        </button>
-      </div>
-
-      <!-- Seletor de Layout do Painel & Reordenação -->
-      <div class="layout-switcher" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
-        <div style="display:flex; align-items:center; gap:8px;">
-          <span class="ls-label"><i class="ph-bold ph-layout"></i> Layout:</span>
-          <div class="ls-options" role="group" aria-label="Escolher layout do painel">
-            <button type="button" class="ls-btn" data-ls-layout="compacto" onclick="definirLayoutDono('compacto')" title="Coluna única compacta e densa"><i class="ph-bold ph-rows"></i> Compacto</button>
-            <button type="button" class="ls-btn" data-ls-layout="confortavel" onclick="definirLayoutDono('confortavel')" title="Duas colunas equilibradas (Padrão)"><i class="ph-bold ph-columns"></i> Confortável</button>
-            <button type="button" class="ls-btn" data-ls-layout="dashboard" onclick="definirLayoutDono('dashboard')" title="Painel amplo com visão executiva"><i class="ph-bold ph-cards"></i> Dashboard</button>
-          </div>
+      <div class="sec-content">
+        <div class="periodo-row">
+          <button class="btn-periodo active" onclick="selecionarPeriodoDono('hoje', this)">
+            <i class="ph-bold ph-sun"></i> Hoje
+          </button>
+          <button class="btn-periodo" onclick="selecionarPeriodoDono('semana', this)">
+            <i class="ph-bold ph-calendar-blank"></i> Semana
+          </button>
+          <button class="btn-periodo" onclick="selecionarPeriodoDono('mes', this)">
+            <i class="ph-bold ph-calendar-plus"></i> Mês
+          </button>
+          <button class="btn-periodo" onclick="togglePeriodoCustomDono(this)">
+            <i class="ph-bold ph-funnel"></i> Outro
+          </button>
         </div>
 
-        
-        <button type="button" id="btn-toggle-all-sections" onclick="window.toggleTodasSecoes()" style="background:var(--card); border:1.5px solid var(--border); color:var(--text); padding:8px 14px; border-radius:12px; font-size:13px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:6px; box-shadow:var(--shadow-sm); transition:all 0.15s;">
-          <i class="ph-bold ph-caret-double-up" id="icon-toggle-all" style="color:var(--primary); font-size:16px;"></i>
-          <span id="txt-toggle-all">Recolher Tudo</span>
-        </button>
-
-        <button type="button" onclick="window.abrirModalReordenarSeccoes()" style="background:var(--card); border:1.5px solid var(--border); color:var(--text); padding:8px 14px; border-radius:12px; font-size:13px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:6px; box-shadow:var(--shadow-sm); transition:all 0.15s;">
-          <i class="ph-bold ph-arrows-down-up" style="color:var(--primary); font-size:16px;"></i>
-          <span>Organizar Seções</span>
-        </button>
-      </div>
-
-      <div id="container-datas-custom" style="display:none; flex-direction:column; gap:12px; margin-top:12px; background:var(--card); padding:20px; border-radius:var(--radius-lg); border:1px solid var(--border);">
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-          <div class="form-group">
-            <label class="form-label" for="dono-data-inicio">Data Início</label>
-            <input type="date" id="dono-data-inicio" class="form-input">
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="dono-data-fim">Data Fim</label>
-            <input type="date" id="dono-data-fim" class="form-input">
-          </div>
-        </div>
-        <button class="btn-primary" onclick="aplicarDatasCustomDono()" style="width:100%; justify-content:center; font-size:var(--fs-lg); padding:20px;">
-          <i class="ph-bold ph-funnel"></i> Filtrar
-        </button>
-      </div>
-    </div>
-
-    <!-- KPI Grid -->
-    <div>
-      <div class="sec-title">
-        <i class="ph-bold ph-chart-bar"></i>
-        <span>Resumo do Dia</span>
-      </div>
-      <div class="kpi-grid">
-
-        <!-- Faturamento -->
-        <div class="kpi-card full">
-          <div class="kpi-label">
-            <span id="kpi-title-faturamento">💰 Faturamento Hoje</span>
-            <div class="kpi-icon green"><i class="ph-fill ph-currency-dollar"></i></div>
-          </div>
-          <div id="kpi-faturamento" class="kpi-value" style="color: var(--green);">R$ 0,00</div>
-          <div id="kpi-sub-total-pedidos" class="kpi-sub">0 pedidos finalizados</div>
-          <div class="progress-wrap">
-            <div class="progress-labels">
-              <span id="goal-percent">0% da meta</span>
-              <span id="goal-target-label">Meta: R$ 0,00</span>
-            </div>
-            <div class="progress-bg">
-              <div id="kpi-progress-fill" class="progress-fill"></div>
+        <!-- Seletor de Layout do Painel & Reordenação -->
+        <div class="layout-switcher" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-top:14px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="ls-label"><i class="ph-bold ph-layout"></i> Layout:</span>
+            <div class="ls-options" role="group" aria-label="Escolher layout do painel">
+              <button type="button" class="ls-btn" data-ls-layout="compacto" onclick="definirLayoutDono('compacto')" title="Coluna única compacta e densa"><i class="ph-bold ph-rows"></i> Compacto</button>
+              <button type="button" class="ls-btn" data-ls-layout="confortavel" onclick="definirLayoutDono('confortavel')" title="Duas colunas equilibradas (Padrão)"><i class="ph-bold ph-columns"></i> Confortável</button>
+              <button type="button" class="ls-btn" data-ls-layout="dashboard" onclick="definirLayoutDono('dashboard')" title="Painel amplo com visão executiva"><i class="ph-bold ph-cards"></i> Dashboard</button>
             </div>
           </div>
+
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button type="button" id="btn-toggle-all-sections" onclick="window.toggleTodasSecoes()" style="background:var(--card2); border:1px solid var(--border); color:var(--text); padding:8px 14px; border-radius:12px; font-size:13px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:6px; box-shadow:var(--shadow-sm); transition:all 0.15s;">
+              <i class="ph-bold ph-caret-double-up" id="icon-toggle-all" style="color:var(--primary); font-size:16px;"></i>
+              <span id="txt-toggle-all">Recolher Tudo</span>
+            </button>
+
+            <button type="button" onclick="window.abrirModalReordenarSeccoes()" style="background:var(--card2); border:1px solid var(--border); color:var(--text); padding:8px 14px; border-radius:12px; font-size:13px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:6px; box-shadow:var(--shadow-sm); transition:all 0.15s;">
+              <i class="ph-bold ph-arrows-down-up" style="color:var(--primary); font-size:16px;"></i>
+              <span>Organizar Seções</span>
+            </button>
+          </div>
         </div>
 
-        <!-- Mesas -->
-        <div class="kpi-card">
-          <div class="kpi-label">
-            <span>🍽️ Mesas</span>
-            <div class="kpi-icon orange"><i class="ph-fill ph-house-line"></i></div>
+        <div id="container-datas-custom" style="display:none; flex-direction:column; gap:12px; margin-top:14px; background:var(--card2); padding:16px; border-radius:var(--radius-lg); border:1px solid var(--border);">
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div class="form-group">
+              <label class="form-label" for="dono-data-inicio">Data Início</label>
+              <input type="date" id="dono-data-inicio" class="form-input">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="dono-data-fim">Data Fim</label>
+              <input type="date" id="dono-data-fim" class="form-input">
+            </div>
           </div>
-          <div id="kpi-mesas" class="kpi-value" style="color: var(--primary);">0</div>
-          <div class="kpi-sub">Em atendimento</div>
-        </div>
-
-        <!-- Ticket médio -->
-        <div class="kpi-card">
-          <div class="kpi-label">
-            <span>📊 Ticket</span>
-            <div class="kpi-icon blue"><i class="ph-fill ph-trend-up"></i></div>
-          </div>
-          <div id="kpi-ticket" class="kpi-value" style="color: var(--blue);">R$ 0,00</div>
-          <div class="kpi-sub">Por pedido</div>
-        </div>
-
-      </div>
-    </div>
-
-    <!-- Equipe -->
-    <div class="equipe-card">
-      <div class="equipe-info">
-        <div class="equipe-count" id="kpi-equipe">0</div>
-        <div class="equipe-label">Colaboradores Ativos</div>
-        <div class="equipe-sub">Com ponto aberto agora</div>
-      </div>
-      <button class="btn-equipe" onclick="abrirModalRhDono()">
-        <i class="ph-bold ph-users-three"></i>
-        <span style="font-size:var(--fs-xs);">Gerenciar<br>Equipe</span>
-      </button>
-    </div>
-
-    <!-- CAIXA — Abrir / Fechar -->
-    <div>
-      <div class="sec-title">
-        <i class="ph-bold ph-cash-register"></i>
-        <span>Controle do Caixa</span>
-      </div>
-      <div class="caixa-card">
-        <div class="caixa-status-row">
-          <div>
-            <div class="caixa-info-label" id="cashier-control-title">Verificando...</div>
-            <div class="caixa-info-sub" id="cashier-control-subtitle">Aguarde...</div>
-          </div>
-          <button id="cashier-toggle-btn" class="btn-caixa open" onclick="abrirCaixaFluxo()">
-            <i class="ph-bold ph-lock-open" id="cashier-btn-icon"></i>
-            <span id="cashier-btn-text">Abrir</span>
+          <button class="btn-primary" onclick="aplicarDatasCustomDono()" style="width:100%; justify-content:center; font-size:var(--fs-md); padding:14px;">
+            <i class="ph-bold ph-funnel"></i> Filtrar
           </button>
         </div>
       </div>
     </div>
 
-    <!-- CONTROLE REMOTO DO CAIXA -->
-    <div>
-      <div class="sec-title">
-        <i class="ph-bold ph-desktop"></i>
-        <span>Controle Remoto do Caixa</span>
+    <!-- 2. KPI Grid & Equipe -->
+    <div id="sec-kpis" class="dono-section dono-sec-full kpi-grid-container">
+      <div class="sec-header-row">
+        <div class="sec-title">
+          <i class="ph-bold ph-chart-bar"></i>
+          <span>Resumo & Métricas de Desempenho</span>
+        </div>
+        <span class="sec-collapsed-badge">Oculto</span>
       </div>
-
-      <!-- Telas do Sistema -->
-      <div style="font-size: var(--fs-xs); font-weight: 800; color: var(--text-sub); text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px;">
-        Navegação de Telas
-      </div>
-      <div class="remote-grid" style="margin-bottom: 16px;">
-        <button class="remote-btn orange-btn" onclick="comandarNavegacao('index.html')">
-          <div class="rb-icon" style="background: var(--primary-light); color: var(--primary);">
-            <i class="ph-bold ph-armchair"></i>
+      <div class="sec-content">
+        <div class="kpi-grid">
+          <!-- Faturamento -->
+          <div class="kpi-card full">
+            <div class="kpi-label">
+              <span id="kpi-title-faturamento">💰 Faturamento Hoje</span>
+              <div class="kpi-icon green"><i class="ph-fill ph-currency-dollar"></i></div>
+            </div>
+            <div id="kpi-faturamento" class="kpi-value" style="color: var(--green);">R$ 0,00</div>
+            <div id="kpi-sub-total-pedidos" class="kpi-sub">0 pedidos finalizados</div>
+            <div class="progress-wrap">
+              <div class="progress-labels">
+                <span id="goal-percent">0% da meta</span>
+                <span id="goal-target-label">Meta: R$ 0,00</span>
+              </div>
+              <div class="progress-bg">
+                <div id="kpi-progress-fill" class="progress-fill"></div>
+              </div>
+            </div>
           </div>
-          <span class="rb-label">Mesas & Salão</span>
-          <span class="rb-sub">Tela principal de pedidos</span>
-        </button>
 
-        <button class="remote-btn blue-btn" onclick="comandarNavegacao('financeiro.html')">
-          <div class="rb-icon" style="background: var(--blue-light); color: var(--blue);">
-            <i class="ph-bold ph-money"></i>
+          <!-- Mesas -->
+          <div class="kpi-card">
+            <div class="kpi-label">
+              <span>🍽️ Mesas</span>
+              <div class="kpi-icon orange"><i class="ph-fill ph-house-line"></i></div>
+            </div>
+            <div id="kpi-mesas" class="kpi-value" style="color: var(--primary);">0</div>
+            <div class="kpi-sub">Em atendimento</div>
           </div>
-          <span class="rb-label">Financeiro & DRE</span>
-          <span class="rb-sub">Caixa, fluxo e sangria</span>
-        </button>
 
-        <button class="remote-btn green-btn" onclick="comandarNavegacao('fila-pedidos.html')">
-          <div class="rb-icon" style="background: var(--green-light); color: var(--green);">
-            <i class="ph-bold ph-cooking-pot"></i>
+          <!-- Ticket médio -->
+          <div class="kpi-card">
+            <div class="kpi-label">
+              <span>📊 Ticket</span>
+              <div class="kpi-icon blue"><i class="ph-fill ph-trend-up"></i></div>
+            </div>
+            <div id="kpi-ticket" class="kpi-value" style="color: var(--blue);">R$ 0,00</div>
+            <div class="kpi-sub">Por pedido</div>
           </div>
-          <span class="rb-label">KDS Cozinha</span>
-          <span class="rb-sub">Fila e esteira de preparo</span>
-        </button>
+        </div>
 
-        <button class="remote-btn purple-btn" onclick="comandarNavegacao('dashboard.html')">
-          <div class="rb-icon" style="background: var(--purple-light); color: var(--purple);">
-            <i class="ph-bold ph-chart-line-up"></i>
+        <!-- Equipe -->
+        <div class="equipe-card" style="margin-top: 14px;">
+          <div class="equipe-info">
+            <div class="equipe-count" id="kpi-equipe">0</div>
+            <div class="equipe-label">Colaboradores Ativos</div>
+            <div class="equipe-sub">Com ponto aberto agora</div>
           </div>
-          <span class="rb-label">Dashboard</span>
-          <span class="rb-sub">Relatórios e vendas</span>
-        </button>
-
-        <button class="remote-btn" onclick="comandarNavegacao('cardapio.html')">
-          <div class="rb-icon" style="background: rgba(234,88,12,0.15); color: #ea580c;">
-            <i class="ph-bold ph-book-open"></i>
-          </div>
-          <span class="rb-label">Cardápio</span>
-          <span class="rb-sub">Cardápio digital</span>
-        </button>
-
-        <button class="remote-btn" onclick="comandarNavegacao('configuracoes.html')">
-          <div class="rb-icon" style="background: rgba(100,116,139,0.15); color: #64748b;">
-            <i class="ph-bold ph-gear"></i>
-          </div>
-          <span class="rb-label">Configurações</span>
-          <span class="rb-sub">Painel administrativo</span>
-        </button>
-
-        <button class="remote-btn" onclick="abrirModalTotemDispositivos()" style="position: relative;">
-          <div class="rb-icon" style="background: rgba(14,165,233,0.15); color: #0ea5e9;">
-            <i class="ph-bold ph-monitor-play"></i>
-          </div>
-          <span class="rb-label">Modo Totem</span>
-          <span class="rb-sub">Autoatendimento no dispositivo</span>
-          <span id="totem-badge-ativo" style="display:none; position:absolute; top:8px; right:10px; background:#22c55e; color:#fff; font-size:9px; font-weight:800; padding:2px 7px; border-radius:999px;">ATIVO</span>
-        </button>
-      </div>
-
-      <!-- Ações Imediatas no Terminal -->
-      <div style="font-size: var(--fs-xs); font-weight: 800; color: var(--text-sub); text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px;">
-        Ações Imediatas no Terminal
-      </div>
-      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
-        <button class="colab-action-btn" onclick="comandarCaixaAcao('recarregar')" style="padding: 14px 10px;">
-          <i class="ph-bold ph-arrows-clockwise" style="font-size: 22px; color: var(--primary);"></i>
-          <span style="font-weight: 800; font-size: 11.5px;">Recarregar (F5)</span>
-        </button>
-
-        <button class="colab-action-btn" onclick="comandarCaixaAcao('tocar_alerta')" style="padding: 14px 10px;">
-          <i class="ph-bold ph-bell-ringing" style="font-size: 22px; color: #f59e0b;"></i>
-          <span style="font-weight: 800; font-size: 11.5px;">Tocar Alerta</span>
-        </button>
-
-        <button class="colab-action-btn" onclick="comandarCaixaAcao('bloquear_tela')" style="padding: 14px 10px;">
-          <i class="ph-bold ph-lock-key" style="font-size: 22px; color: #ef4444;"></i>
-          <span style="font-weight: 800; font-size: 11.5px;">Bloquear Tela</span>
-        </button>
-
-        <button class="colab-action-btn" onclick="comandarCaixaAcao('alternar_tema')" style="padding: 14px 10px;">
-          <i class="ph-bold ph-moon-stars" style="font-size: 22px; color: #8b5cf6;"></i>
-          <span style="font-weight: 800; font-size: 11.5px;">Alternar Tema</span>
-        </button>
-
-        <button class="colab-action-btn" onclick="comandarCaixaAcao('abrir_gaveta')" style="padding: 14px 10px;">
-          <i class="ph-bold ph-receipt" style="font-size: 22px; color: #10b981;"></i>
-          <span style="font-weight: 800; font-size: 11.5px;">Abrir Gaveta</span>
-        </button>
-
-        <button class="colab-action-btn" onclick="comandarCaixaAcao('abrir_fila')" style="padding: 14px 10px;">
-          <i class="ph-bold ph-users-three" style="font-size: 22px; color: #3b82f6;"></i>
-          <span style="font-weight: 800; font-size: 11.5px;">Abrir Fila</span>
-        </button>
+          <button class="btn-equipe" onclick="abrirModalRhDono()">
+            <i class="ph-bold ph-users-three"></i>
+            <span style="font-size:var(--fs-xs);">Gerenciar<br>Equipe</span>
+          </button>
+        </div>
       </div>
     </div>
 
-    <!-- CONTROLE REMOTO DE CADA COLABORADOR -->
-    <div>
-      <div class="sec-title" style="display: flex; justify-content: space-between; align-items: center;">
-        <div style="display: flex; align-items: center; gap: 8px;">
+    <!-- 3. CAIXA — Abrir / Fechar -->
+    <div id="sec-caixa" class="dono-section dono-sec-half">
+      <div class="sec-header-row">
+        <div class="sec-title">
+          <i class="ph-bold ph-cash-register"></i>
+          <span>Controle do Caixa</span>
+        </div>
+        <span class="sec-collapsed-badge">Oculto</span>
+      </div>
+      <div class="sec-content">
+        <div class="caixa-card">
+          <div class="caixa-status-row">
+            <div>
+              <div class="caixa-info-label" id="cashier-control-title">Verificando...</div>
+              <div class="caixa-info-sub" id="cashier-control-subtitle">Aguarde...</div>
+            </div>
+            <button id="cashier-toggle-btn" class="btn-caixa open" onclick="abrirCaixaFluxo()">
+              <i class="ph-bold ph-lock-open" id="cashier-btn-icon"></i>
+              <span id="cashier-btn-text">Abrir</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. CONTROLE REMOTO DO CAIXA -->
+    <div id="sec-remote" class="dono-section dono-sec-half">
+      <div class="sec-header-row">
+        <div class="sec-title">
+          <i class="ph-bold ph-desktop"></i>
+          <span>Controle Remoto do Caixa</span>
+        </div>
+        <span class="sec-collapsed-badge">Oculto</span>
+      </div>
+      <div class="sec-content">
+        <!-- Telas do Sistema -->
+        <div style="font-size: var(--fs-xs); font-weight: 800; color: var(--text-sub); text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px;">
+          Navegação de Telas
+        </div>
+        <div class="remote-grid" style="margin-bottom: 16px;">
+          <button class="remote-btn orange-btn" onclick="comandarNavegacao('index.html')">
+            <div class="rb-icon" style="background: var(--primary-light); color: var(--primary);">
+              <i class="ph-bold ph-armchair"></i>
+            </div>
+            <span class="rb-label">Mesas & Salão</span>
+            <span class="rb-sub">Tela principal de pedidos</span>
+          </button>
+
+          <button class="remote-btn blue-btn" onclick="comandarNavegacao('financeiro.html')">
+            <div class="rb-icon" style="background: var(--blue-light); color: var(--blue);">
+              <i class="ph-bold ph-money"></i>
+            </div>
+            <span class="rb-label">Financeiro & DRE</span>
+            <span class="rb-sub">Caixa, fluxo e sangria</span>
+          </button>
+
+          <button class="remote-btn green-btn" onclick="comandarNavegacao('fila-pedidos.html')">
+            <div class="rb-icon" style="background: var(--green-light); color: var(--green);">
+              <i class="ph-bold ph-cooking-pot"></i>
+            </div>
+            <span class="rb-label">KDS Cozinha</span>
+            <span class="rb-sub">Fila e esteira de preparo</span>
+          </button>
+
+          <button class="remote-btn purple-btn" onclick="comandarNavegacao('dashboard.html')">
+            <div class="rb-icon" style="background: var(--purple-light); color: var(--purple);">
+              <i class="ph-bold ph-chart-line-up"></i>
+            </div>
+            <span class="rb-label">Dashboard</span>
+            <span class="rb-sub">Relatórios e vendas</span>
+          </button>
+
+          <button class="remote-btn" onclick="comandarNavegacao('cardapio.html')">
+            <div class="rb-icon" style="background: rgba(234,88,12,0.15); color: #ea580c;">
+              <i class="ph-bold ph-book-open"></i>
+            </div>
+            <span class="rb-label">Cardápio</span>
+            <span class="rb-sub">Cardápio digital</span>
+          </button>
+
+          <button class="remote-btn" onclick="comandarNavegacao('configuracoes.html')">
+            <div class="rb-icon" style="background: rgba(100,116,139,0.15); color: #64748b;">
+              <i class="ph-bold ph-gear"></i>
+            </div>
+            <span class="rb-label">Configurações</span>
+            <span class="rb-sub">Painel administrativo</span>
+          </button>
+
+          <button class="remote-btn" onclick="abrirModalTotemDispositivos()" style="position: relative;">
+            <div class="rb-icon" style="background: rgba(14,165,233,0.15); color: #0ea5e9;">
+              <i class="ph-bold ph-monitor-play"></i>
+            </div>
+            <span class="rb-label">Modo Totem</span>
+            <span class="rb-sub">Autoatendimento no dispositivo</span>
+            <span id="totem-badge-ativo" style="display:none; position:absolute; top:8px; right:10px; background:#22c55e; color:#fff; font-size:9px; font-weight:800; padding:2px 7px; border-radius:999px;">ATIVO</span>
+          </button>
+        </div>
+
+        <!-- Ações Imediatas no Terminal -->
+        <div style="font-size: var(--fs-xs); font-weight: 800; color: var(--text-sub); text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px;">
+          Ações Imediatas no Terminal
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+          <button class="colab-action-btn" onclick="comandarCaixaAcao('recarregar')" style="padding: 14px 10px;">
+            <i class="ph-bold ph-arrows-clockwise" style="font-size: 22px; color: var(--primary);"></i>
+            <span style="font-weight: 800; font-size: 11.5px;">Recarregar (F5)</span>
+          </button>
+
+          <button class="colab-action-btn" onclick="comandarCaixaAcao('tocar_alerta')" style="padding: 14px 10px;">
+            <i class="ph-bold ph-bell-ringing" style="font-size: 22px; color: #f59e0b;"></i>
+            <span style="font-weight: 800; font-size: 11.5px;">Tocar Alerta</span>
+          </button>
+
+          <button class="colab-action-btn" onclick="comandarCaixaAcao('bloquear_tela')" style="padding: 14px 10px;">
+            <i class="ph-bold ph-lock-key" style="font-size: 22px; color: #ef4444;"></i>
+            <span style="font-weight: 800; font-size: 11.5px;">Bloquear Tela</span>
+          </button>
+
+          <button class="colab-action-btn" onclick="comandarCaixaAcao('alternar_tema')" style="padding: 14px 10px;">
+            <i class="ph-bold ph-moon-stars" style="font-size: 22px; color: #8b5cf6;"></i>
+            <span style="font-weight: 800; font-size: 11.5px;">Alternar Tema</span>
+          </button>
+
+          <button class="colab-action-btn" onclick="comandarCaixaAcao('abrir_gaveta')" style="padding: 14px 10px;">
+            <i class="ph-bold ph-receipt" style="font-size: 22px; color: #10b981;"></i>
+            <span style="font-weight: 800; font-size: 11.5px;">Abrir Gaveta</span>
+          </button>
+
+          <button class="colab-action-btn" onclick="comandarCaixaAcao('abrir_fila')" style="padding: 14px 10px;">
+            <i class="ph-bold ph-users-three" style="font-size: 22px; color: #3b82f6;"></i>
+            <span style="font-weight: 800; font-size: 11.5px;">Abrir Fila</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. CONTROLE REMOTO DE CADA COLABORADOR -->
+    <div id="sec-colab" class="dono-section dono-sec-half">
+      <div class="sec-header-row">
+        <div class="sec-title">
           <i class="ph-bold ph-users"></i>
           <span>Controle Remoto de Colaboradores</span>
         </div>
-        <button class="btn-refresh" onclick="carregarFuncionariosControleRemoto()" style="padding: 4px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text-sub); cursor: pointer; font-size: 12px;">
-          <i class="ph ph-arrows-clockwise"></i> Atualizar
-        </button>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button class="btn-refresh" onclick="carregarFuncionariosControleRemoto()" style="padding: 4px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--card2); color: var(--text-sub); cursor: pointer; font-size: 12px;">
+            <i class="ph ph-arrows-clockwise"></i> Atualizar
+          </button>
+          <span class="sec-collapsed-badge">Oculto</span>
+        </div>
       </div>
-      <div id="lista-controle-colaboradores" style="display: flex; flex-direction: column; gap: 12px;">
-        <div style="text-align: center; color: var(--text-sub); font-size: var(--fs-sm); padding: 16px;">Carregando colaboradores...</div>
+      <div class="sec-content">
+        <div id="lista-controle-colaboradores" style="display: flex; flex-direction: column; gap: 12px;">
+          <div style="text-align: center; color: var(--text-sub); font-size: var(--fs-sm); padding: 16px;">Carregando colaboradores...</div>
+        </div>
       </div>
     </div>
 
-    <!-- CUPONS QR & PROMOÇÕES -->
-    
-    <!-- MÓDULO VIP: MENSAGENS EM MASSA & NOTIFICAÇÕES PUSH PWA (CONTRATAÇÃO À PARTE) -->
-    <div id="sec-marketing-vip" class="dono-section">
-      <div class="sec-title" style="display:flex; justify-content:space-between; align-items:center;">
-        <div style="display:flex; align-items:center; gap:8px;">
+    <!-- 6. MÓDULO VIP: MENSAGENS EM MASSA & NOTIFICAÇÕES PUSH -->
+    <div id="sec-marketing-vip" class="dono-section dono-sec-half">
+      <div class="sec-header-row">
+        <div class="sec-title">
           <i class="ph-bold ph-megaphone" style="color:var(--primary);"></i>
-          <span>Mensagens & Notificações Push (PWA + WhatsApp)</span>
+          <span>Mensagens & Push (PWA + WhatsApp)</span>
         </div>
         <span class="sec-collapsed-badge">Oculto</span>
       </div>
 
-      <div class="sec-content" id="marketing-container-content" style="margin-top:14px;">
+      <div class="sec-content" id="marketing-container-content">
         <!-- Card Promocional de Contratação -->
         <div id="marketing-showcase-card" style="background:linear-gradient(135deg, rgba(252,75,21,0.08) 0%, rgba(59,130,246,0.08) 100%); border:1.5px dashed var(--primary); border-radius:18px; padding:22px; text-align:center;">
           <div style="font-size:36px; margin-bottom:8px;">📲 📢</div>
@@ -1798,106 +1819,134 @@
       </div>
     </div>
 
-    <div class="cupons-section-dono">
-      <div class="sec-title" style="display:flex; justify-content:space-between; align-items:center;">
-        <div style="display:flex; align-items:center; gap:8px;">
+    <!-- 7. CUPONS QR & PROMOÇÕES -->
+    <div id="sec-cupons" class="dono-section dono-sec-half cupons-section-dono">
+      <div class="sec-header-row">
+        <div class="sec-title">
           <i class="ph-bold ph-ticket" style="color:var(--primary);"></i>
           <span>Cupons QR & Promoções</span>
         </div>
-        <button class="btn-primary" onclick="abrirModalCriarCupom()" style="padding:10px 16px; font-size:var(--fs-sm); border-radius:12px; gap:6px;">
-          <i class="ph-bold ph-plus"></i> Novo Cupom QR
-        </button>
-      </div>
-
-      <!-- Resumo Rápido de Cupons -->
-      <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:12px;">
-        <div class="kpi-card" style="padding:14px; text-align:center;">
-          <span style="font-size:var(--fs-xs); color:var(--text-sub); display:block; font-weight:700;">Ativos</span>
-          <div id="kpi-cupons-ativos" style="font-size:var(--fs-xl); font-weight:900; color:var(--primary);">0</div>
-        </div>
-        <div class="kpi-card" style="padding:14px; text-align:center;">
-          <span style="font-size:var(--fs-xs); color:var(--text-sub); display:block; font-weight:700;">Total Usos</span>
-          <div id="kpi-cupons-usos" style="font-size:var(--fs-xl); font-weight:900; color:var(--green);">0</div>
-        </div>
-        <div class="kpi-card" style="padding:14px; text-align:center;">
-          <span style="font-size:var(--fs-xs); color:var(--text-sub); display:block; font-weight:700;">Vendas c/ QR</span>
-          <div id="kpi-cupons-vendas" style="font-size:var(--fs-xl); font-weight:900; color:var(--blue);">R$ 0</div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button class="btn-primary" onclick="abrirModalCriarCupom()" style="padding:8px 14px; font-size:var(--fs-xs); border-radius:10px; gap:6px;">
+            <i class="ph-bold ph-plus"></i> Novo Cupom
+          </button>
+          <span class="sec-collapsed-badge">Oculto</span>
         </div>
       </div>
 
-      <!-- Grid de Cupons -->
-      <div id="grid-cupons-dono" style="display:flex; flex-direction:column; gap:12px;">
-        <div style="text-align:center; color:var(--text-sub); font-size:var(--fs-sm); padding:20px;">Carregando cupons...</div>
-      </div>
-    </div>
-
-    <!-- Painel Rápido: Meta Diária & Aviso à Equipe -->
-    <div style="display:grid; grid-template-columns: 1fr; gap:12px;">
-      <!-- Meta de vendas compacta -->
-      <div class="meta-input-card" style="padding:16px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-          <div style="display:flex; align-items:center; gap:6px; font-size:var(--fs-sm); font-weight:800;">
-            <i class="ph-bold ph-target" style="color:var(--primary);"></i>
-            <span>Meta de Vendas</span>
+      <div class="sec-content">
+        <!-- Resumo Rápido de Cupons -->
+        <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:12px;">
+          <div class="kpi-card" style="padding:14px; text-align:center;">
+            <span style="font-size:var(--fs-xs); color:var(--text-sub); display:block; font-weight:700;">Ativos</span>
+            <div id="kpi-cupons-ativos" style="font-size:var(--fs-xl); font-weight:900; color:var(--primary);">0</div>
           </div>
-          <span style="font-size:var(--fs-xs); color:var(--text-sub);">Diária</span>
+          <div class="kpi-card" style="padding:14px; text-align:center;">
+            <span style="font-size:var(--fs-xs); color:var(--text-sub); display:block; font-weight:700;">Total Usos</span>
+            <div id="kpi-cupons-usos" style="font-size:var(--fs-xl); font-weight:900; color:var(--green);">0</div>
+          </div>
+          <div class="kpi-card" style="padding:14px; text-align:center;">
+            <span style="font-size:var(--fs-xs); color:var(--text-sub); display:block; font-weight:700;">Vendas c/ QR</span>
+            <div id="kpi-cupons-vendas" style="font-size:var(--fs-xl); font-weight:900; color:var(--blue);">R$ 0</div>
+          </div>
         </div>
-        <div class="form-row" style="gap:8px;">
-          <input type="number" id="meta-input" class="form-input" placeholder="Ex: 5000" inputmode="numeric" style="padding:10px 14px; font-size:var(--fs-md);">
-          <button class="btn-primary" onclick="salvarMeta()" style="padding:10px 16px; font-size:var(--fs-sm);">
-            <i class="ph-bold ph-check"></i> Salvar
-          </button>
-        </div>
-      </div>
 
-      <!-- Aviso urgente compacto -->
-      <div class="aviso-area" style="padding:16px;">
-        <div style="display:flex; align-items:center; gap:6px; font-size:var(--fs-sm); font-weight:800; margin-bottom:8px;">
-          <i class="ph-bold ph-megaphone" style="color:#8b5cf6;"></i>
-          <span>Aviso Imediato para Equipe</span>
-        </div>
-        <div style="display:flex; gap:8px;">
-          <input type="text" id="notif-input" class="form-input" placeholder="Ex: Vamos abrir 30 minutos mais cedo hoje!" style="flex:1; padding:10px 14px; font-size:var(--fs-sm);">
-          <button class="btn-aviso" onclick="notificarEquipe()" style="padding:10px 16px; font-size:var(--fs-sm); width:auto; white-space:nowrap;">
-            <i class="ph-bold ph-paper-plane-tilt"></i> Enviar
-          </button>
+        <!-- Grid de Cupons -->
+        <div id="grid-cupons-dono" style="display:flex; flex-direction:column; gap:12px;">
+          <div style="text-align:center; color:var(--text-sub); font-size:var(--fs-sm); padding:20px;">Carregando cupons...</div>
         </div>
       </div>
     </div>
 
-    <!-- Ranking de produtos -->
-    <div class="ranking-card">
-      <div class="ranking-header" onclick="toggleRanking()">
-        <div class="ranking-header-left">
+    <!-- 8. META DIÁRIA & AVISO À EQUIPE -->
+    <div id="sec-meta-aviso" class="dono-section dono-sec-half">
+      <div class="sec-header-row">
+        <div class="sec-title">
+          <i class="ph-bold ph-target"></i>
+          <span>Meta & Comunicação da Equipe</span>
+        </div>
+        <span class="sec-collapsed-badge">Oculto</span>
+      </div>
+      <div class="sec-content" style="display:flex; flex-direction:column; gap:12px;">
+        <!-- Meta de vendas -->
+        <div class="meta-input-card" style="padding:16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div style="display:flex; align-items:center; gap:6px; font-size:var(--fs-sm); font-weight:800;">
+              <i class="ph-bold ph-target" style="color:var(--primary);"></i>
+              <span>Meta Diária de Faturamento</span>
+            </div>
+            <span style="font-size:var(--fs-xs); color:var(--text-sub);">R$ Meta</span>
+          </div>
+          <div class="form-row" style="gap:8px;">
+            <input type="number" id="meta-input" class="form-input" placeholder="Ex: 5000" inputmode="numeric" style="padding:10px 14px; font-size:var(--fs-md);">
+            <button class="btn-primary" onclick="salvarMeta()" style="padding:10px 16px; font-size:var(--fs-sm);">
+              <i class="ph-bold ph-check"></i> Salvar
+            </button>
+          </div>
+        </div>
+
+        <!-- Aviso urgente -->
+        <div class="aviso-area" style="padding:16px;">
+          <div style="display:flex; align-items:center; gap:6px; font-size:var(--fs-sm); font-weight:800; margin-bottom:8px;">
+            <i class="ph-bold ph-megaphone" style="color:#8b5cf6;"></i>
+            <span>Aviso Imediato para Equipe</span>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="notif-input" class="form-input" placeholder="Ex: Vamos abrir 30 minutos mais cedo hoje!" style="flex:1; padding:10px 14px; font-size:var(--fs-sm);">
+            <button class="btn-aviso" onclick="notificarEquipe()" style="padding:10px 16px; font-size:var(--fs-sm); width:auto; white-space:nowrap;">
+              <i class="ph-bold ph-paper-plane-tilt"></i> Enviar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 9. RANKING DE PRODUTOS -->
+    <div id="sec-ranking" class="dono-section dono-sec-half ranking-card">
+      <div class="sec-header-row ranking-header" onclick="toggleRanking()">
+        <div class="sec-title ranking-header-left">
           <i class="ph-bold ph-trophy"></i>
           <span>Produtos Mais Vendidos</span>
         </div>
-        <i class="ph-bold ph-caret-down ranking-chevron" id="ranking-chevron"></i>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <i class="ph-bold ph-caret-down ranking-chevron" id="ranking-chevron"></i>
+          <span class="sec-collapsed-badge">Oculto</span>
+        </div>
       </div>
-      <div class="ranking-body" id="ranking-body">
+      <div class="sec-content ranking-body" id="ranking-body">
         <div id="ranking-list" style="padding:8px 0;">
           <div style="text-align:center; color:var(--text-sub); padding:24px; font-size:var(--fs-md);">Nenhuma venda registrada.</div>
         </div>
       </div>
     </div>
 
-    <!-- Funcionalidades -->
-    <div>
-      <div class="sec-title">
-        <i class="ph-bold ph-toggle-left"></i>
-        <span>Funcionalidades</span>
+    <!-- 10. FUNCIONALIDADES ATIVAS DO SISTEMA -->
+    <div id="sec-features" class="dono-section dono-sec-full features-container">
+      <div class="sec-header-row">
+        <div class="sec-title">
+          <i class="ph-bold ph-toggle-left"></i>
+          <span>Módulos & Funcionalidades</span>
+        </div>
+        <span class="sec-collapsed-badge">Oculto</span>
       </div>
-      <div class="features-grid" id="features-grid-dono"></div>
+      <div class="sec-content">
+        <div class="features-grid" id="features-grid-dono"></div>
+      </div>
     </div>
 
-    <!-- Feed de Atividade -->
-    <div>
-      <div class="sec-title">
-        <i class="ph-bold ph-activity"></i>
-        <span>Atividade em Tempo Real</span>
+    <!-- 11. FEED DE ATIVIDADES EM TEMPO REAL -->
+    <div id="sec-feed" class="dono-section dono-sec-full">
+      <div class="sec-header-row">
+        <div class="sec-title">
+          <i class="ph-bold ph-activity"></i>
+          <span>Atividade Operacional em Tempo Real</span>
+        </div>
+        <span class="sec-collapsed-badge">Oculto</span>
       </div>
-      <div id="activity-feed" class="feed-card">
-        <div style="text-align:center; color:var(--text-sub); font-size:var(--fs-md); padding:12px;">Aguardando atividades...</div>
+      <div class="sec-content">
+        <div id="activity-feed" class="feed-card">
+          <div style="text-align:center; color:var(--text-sub); font-size:var(--fs-md); padding:12px;">Aguardando atividades...</div>
+        </div>
       </div>
     </div>
 
@@ -1923,7 +1972,7 @@
       <p class="caixa-modal-desc">Digite o valor em dinheiro que está no caixa agora (fundo de troco).</p>
       <div class="form-group">
         <label class="form-label" for="fundo-troco-input">💵 Valor do Fundo de Troco (R$)</label>
-        <input type="number" id="fundo-troco-input" class="form-input" placeholder="Ex: 200,00" inputmode="decimal" style="font-size:28px; font-weight:900; text-align:center; padding:24px;">
+        <input type="text" id="fundo-troco-input" class="form-input" placeholder="Ex: 200,00" inputmode="decimal" value="100,00" style="font-size:28px; font-weight:900; text-align:center; padding:20px;">
       </div>
       <div class="confirm-row">
         <button class="btn-cancel" onclick="fecharModal('modal-abrir-caixa')">Cancelar</button>
@@ -1948,7 +1997,7 @@
       <p class="caixa-modal-desc">Conte o dinheiro que está no caixa e digite o valor total encontrado.</p>
       <div class="form-group">
         <label class="form-label" for="saldo-final-input">💵 Total em Dinheiro no Caixa (R$)</label>
-        <input type="number" id="saldo-final-input" class="form-input" placeholder="Ex: 350,00" inputmode="decimal" style="font-size:28px; font-weight:900; text-align:center; padding:24px;">
+        <input type="text" id="saldo-final-input" class="form-input" placeholder="Ex: 350,00" inputmode="decimal" value="0,00" style="font-size:28px; font-weight:900; text-align:center; padding:20px;">
       </div>
       <div class="confirm-row">
         <button class="btn-cancel" onclick="fecharModal('modal-fechar-caixa')">Cancelar</button>

@@ -146,6 +146,19 @@ function initPainelFuncionarioDOM() {
           if (btn) btn.click();
         }
       });
+      if (id === 'login-pin') {
+        let pinTimer = null;
+        el.addEventListener('input', () => {
+          const val = el.value.trim();
+          clearTimeout(pinTimer);
+          if (val.length >= 4) {
+            pinTimer = setTimeout(() => {
+              const btn = document.getElementById('btn-login');
+              if (btn && !btn.disabled) btn.click();
+            }, 50);
+          }
+        });
+      }
     }
   });
 

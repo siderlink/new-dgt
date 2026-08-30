@@ -73,6 +73,25 @@ window.selecionarEstacaoTrabalho = function(url, estacaoNome) {
 };
 
 
+window.preencherLoginOwner = function(email, senha) {
+  window.setTipoPerfil('owner');
+  const userEl = document.getElementById('username');
+  const passEl = document.getElementById('password');
+  if (userEl) userEl.value = email;
+  if (passEl) passEl.value = senha;
+  attemptOwnerLogin();
+};
+
+window.preencherPinColaborador = function(pin) {
+  window.setTipoPerfil('colaborador');
+  window.setModoColaborador('pin');
+  const pinEl = document.getElementById('colab-pin-input');
+  if (pinEl) {
+    pinEl.value = pin;
+    attemptColaboradorLogin();
+  }
+};
+
 let _tipoPerfil = 'owner'; // 'owner' ou 'colaborador'
 let _modoColaborador = 'pin'; // 'pin' ou 'user'
 let _loginResAtual = null;
@@ -216,8 +235,8 @@ function ensureLoginSocket() {
         estacoes = ['garcom'];
       } else if (['cozinha', 'copa', 'bar', 'kds'].includes(cargo)) {
         estacoes = ['cozinha'];
-      } else if (cargo === 'caixa') {
-        estacoes = ['caixa', 'garcom'];
+      } else if (cargo === 'caixa' || cargo === 'financeiro') {
+        estacoes = ['caixa'];
       } else if (['admin', 'administrador', 'gerente', 'supervisor'].includes(cargo)) {
         estacoes = ['caixa', 'garcom', 'cozinha', 'configuracoes', 'delivery'];
       } else {
@@ -298,7 +317,7 @@ window.attemptColaboradorLogin = function() {
   const btnSubmit = document.getElementById('btn-submit-colaborador');
   
   if (_modoColaborador === 'pin') {
-    const pin = document.getElementById('colab-pin-input').value.trim();
+    const pin = (document.getElementById('colab-pin-input')?.value || '').trim();
     if (!pin) {
       if (errorMsg) { errorMsg.innerText = 'Digite seu PIN!'; errorMsg.style.display = 'block'; }
       return;
@@ -306,8 +325,8 @@ window.attemptColaboradorLogin = function() {
     if (btnSubmit) { btnSubmit.innerText = 'Validando...'; btnSubmit.disabled = true; }
     loginSocket.emit('login_por_pin', { pin });
   } else {
-    const usuario = document.getElementById('colab-user-input').value.trim();
-    const senha = document.getElementById('colab-pass-input').value.trim();
+    const usuario = (document.getElementById('colab-user-input')?.value || '').trim();
+    const senha = (document.getElementById('colab-pass-input')?.value || '').trim();
     if (!usuario || !senha) {
       if (errorMsg) { errorMsg.innerText = 'Preencha usuário e senha!'; errorMsg.style.display = 'block'; }
       return;
@@ -318,12 +337,36 @@ window.attemptColaboradorLogin = function() {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+  ensureLoginSocket();
+
   document.getElementById('password')?.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') attemptOwnerLogin();
   });
-  document.getElementById('colab-pin-input')?.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') attemptColaboradorLogin();
+  document.getElementById('email')?.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') document.getElementById('password')?.focus();
   });
+
+  const pinInput = document.getElementById('colab-pin-input');
+  if (pinInput) {
+    let pinDebounce = null;
+    pinInput.addEventListener('input', () => {
+      const val = (pinInput.value || '').trim();
+      const errorMsg = document.getElementById('error-msg-colaborador');
+      if (errorMsg) errorMsg.style.display = 'none';
+
+      clearTimeout(pinDebounce);
+      // Validação instantânea no último caractere digitado (>= 4 caracteres como g123, c123, f123, a123)
+      if (val.length >= 4) {
+        pinDebounce = setTimeout(() => {
+          attemptColaboradorLogin();
+        }, 50);
+      }
+    });
+    pinInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') attemptColaboradorLogin();
+    });
+  }
+
   document.getElementById('colab-pass-input')?.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') attemptColaboradorLogin();
   });

@@ -1,4 +1,7 @@
 
+var socket = window.socket || (typeof io !== 'undefined' ? io({ query: { token: localStorage.getItem('chef_token'), restaurante_id: localStorage.getItem('restaurante_id') || '1' } }) : null);
+window.socket = socket;
+
   // ─── TERMOS DE USO & ONBOARDING INTELIGENTE COM DEEP RESEARCH ───
   window.wizardToggleTerms = function() {
     const chk = document.getElementById('wiz-terms-check');
@@ -1575,16 +1578,20 @@ window.mostrarQrSepararContaMesa = function(nomeMesa) {
 })();
 
 const HOST = window.location.hostname || 'localhost';
-const socket = io({ query: { token: localStorage.getItem('chef_token'), restaurante_id: localStorage.getItem('restaurante_id') || '1' } });
-window.socket = socket;
-if (typeof initChefTz === 'function') initChefTz(socket);
+if (!socket && typeof io !== 'undefined') {
+  socket = io({ query: { token: localStorage.getItem('chef_token'), restaurante_id: localStorage.getItem('restaurante_id') || '1' } });
+  window.socket = socket;
+}
+if (socket && typeof initChefTz === 'function') initChefTz(socket);
 
 // Inicializar plugins client-side
-if (window.ChefPluginLoader) window.ChefPluginLoader.init(socket, { currentPage: 'caixa' });
+if (socket && window.ChefPluginLoader) window.ChefPluginLoader.init(socket, { currentPage: 'caixa' });
 
 // Modo Totem remoto (quiosque): registra aqui, pois o socket já existe neste ponto.
-socket.on('modo_dispositivo', (data) => window.aplicarModoTotem(data && data.modo));
-socket.emit('get_modo_dispositivo', { serial: window.obterSerialDispositivo() });
+if (socket && socket.on) {
+  socket.on('modo_dispositivo', (data) => window.aplicarModoTotem(data && data.modo));
+  socket.emit('get_modo_dispositivo', { serial: window.obterSerialDispositivo() });
+}
 
 socket.on('tenant_atualizado', (data) => {
   if (data && data.restaurante_id) {
@@ -6198,18 +6205,23 @@ document.addEventListener('DOMContentLoaded', () => {
   if (mnuAbrir) mnuAbrir.onclick = () => {
     const b = document.getElementById('btn-abrir-caixa');
     if (b) b.click();
-    else {
-      // if not in DOM, maybe we need to emit directly
-      const val = prompt('Qual o valor inicial do caixa (R$)?', '0.00');
+    else if (typeof window.abrirCaixaClick === 'function') {
+      window.abrirCaixaClick();
+    } else {
+      const val = prompt('Qual o valor inicial do caixa (R$)?', '100,00');
       if (val !== null) {
-        let senhaAdmin = 'bypass_dono';
-        if (!window.isDonoMaster()) {
-          senhaAdmin = prompt('Digite a senha de administrador para abrir o caixa:');
-          if (!senhaAdmin) return alert('Operação cancelada.');
-        } else {
-          if (!confirm('Confirmar abertura do caixa com R$ ' + (parseFloat(val) || 0).toFixed(2) + '?')) return;
+        const parsedVal = parseFloat(String(val || '0').replace(',', '.')) || 0;
+        const op = (window.crmPerfil && window.crmPerfil.nome) || 'Administrador';
+        if (typeof socket !== 'undefined' && socket && socket.connected) {
+          socket.emit('abrir_caixa', { fundo_troco: parsedVal, operador: op });
         }
-        socket.emit('abrir_caixa', { fundo_troco: parseFloat(val) || 0, operador: window.crmPerfil ? window.crmPerfil.nome : 'Dono Master', senha: senhaAdmin });
+        fetch('/api/caixa/abrir', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(typeof authHeaders === 'function' ? authHeaders() : {}) },
+          body: JSON.stringify({ fundo_troco: parsedVal, operador: op })
+        }).then(() => {
+          if (typeof showToast === 'function') showToast('Caixa aberto com sucesso!', 'success');
+        }).catch(() => {});
       }
     }
   };
