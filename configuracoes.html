@@ -5068,9 +5068,14 @@
 <div class="admin-tab-content" id="admin-tab-funcionalidades" style="display:none; flex-direction:column; overflow-y:auto; padding-right:8px;"></div>
 
 <div id="admin-tab-perfil" class="admin-tab-content" style="display:none; overflow-y:auto; padding-right: 8px;">
-        <div style="background: linear-gradient(135deg, #059669, #047857); border-radius: 16px; padding: 24px; color: white; margin-bottom: 20px;">
-          <h3 style="margin:0 0 4px;"><i class="ph ph-storefront"></i> Perfil do Restaurante</h3>
-          <p style="margin:0; opacity:0.8; font-size:14px;">Centralize as informações do seu estabelecimento para o funcionamento do sistema.</p>
+        <div style="background: linear-gradient(135deg, #059669, #047857); border-radius: 16px; padding: 24px; color: white; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+          <div>
+            <h3 style="margin:0 0 4px; font-size: 20px; font-weight: 800; display: flex; align-items: center; gap: 8px;"><i class="ph ph-storefront"></i> Perfil do Restaurante</h3>
+            <p style="margin:0; opacity:0.9; font-size:13.5px;">Centralize as informações do seu estabelecimento e compartilhe seu cardápio digital.</p>
+          </div>
+          <button type="button" id="btn-share-qr-perfil-header" onclick="window.abrirModalCompartilharCardapioQR()" style="background:#ffffff; color:#047857; font-weight:800; border:none; padding:11px 20px; border-radius:12px; cursor:pointer; display:inline-flex; align-items:center; gap:8px; font-size:13.5px; box-shadow:0 4px 12px rgba(0,0,0,0.15); transition:transform 0.15s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
+            <i class="ph ph-qr-code" style="font-size:19px;"></i> Compartilhar QR Code
+          </button>
         </div>
         <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; max-width: 960px;">
           <div style="display:flex; flex-direction:column; gap:4px; grid-column: span 3;">
@@ -5079,8 +5084,13 @@
           </div>
 
           <div style="grid-column: span 3; background:linear-gradient(135deg, #eff6ff, #e0e7ff); border:1px solid #c7d2fe; border-radius:12px; padding:18px; margin-bottom:4px;">
-            <h4 style="margin:0 0 12px; font-size:14px; color:#3730a3; display:flex; align-items:center; gap:8px;"><i class="ph ph-link" style="font-size:18px;"></i> Link e Domínio do Restaurante</h4>
-            <p style="margin:0 0 14px; font-size:12px; color:#6366f1;">Configure o endereço web do seu cardápio online. Seus clientes acessarão por este link.</p>
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+              <h4 style="margin:0; font-size:14.5px; color:#3730a3; display:flex; align-items:center; gap:8px;"><i class="ph ph-link" style="font-size:18px;"></i> Link e Domínio do Restaurante</h4>
+              <button type="button" id="btn-share-qr-link-box" onclick="window.abrirModalCompartilharCardapioQR()" style="padding:7px 14px; background:#059669; color:white; border:none; border-radius:8px; font-size:12.5px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px; box-shadow:0 2px 6px rgba(5,150,105,0.25);">
+                <i class="ph ph-qr-code" style="font-size:16px;"></i> Ver &amp; Compartilhar QR Code
+              </button>
+            </div>
+            <p style="margin:0 0 14px; font-size:12px; color:#6366f1;">Configure o endereço web do seu cardápio online. Seus clientes acessarão por este link ou via QR Code.</p>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
               <div>
                 <label style="font-size:12px; font-weight:600; color:var(--cfg-text-muted);">Slug (permalink)</label>
@@ -5101,12 +5111,15 @@
               <i class="ph ph-eye" style="margin-right:6px;"></i>
               <span id="rest-url-preview-text">—</span>
             </div>
-            <div style="margin-top:10px; display:flex; gap:8px;">
+            <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
               <button id="btn-rest-salvar-slug" style="padding:8px 16px; background:#6366f1; color:white; border:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px;">
                 <i class="ph ph-check"></i> Salvar Link
               </button>
               <button id="btn-rest-salvar-dominio" style="padding:8px 16px; background:#8b5cf6; color:white; border:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px;">
                 <i class="ph ph-globe"></i> Salvar Domínio
+              </button>
+              <button type="button" id="btn-share-qr-slug-bar" onclick="window.abrirModalCompartilharCardapioQR()" style="padding:8px 16px; background:#059669; color:white; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:6px;">
+                <i class="ph ph-share-network"></i> Compartilhar QR Code
               </button>
             </div>
           </div>
@@ -6852,6 +6865,62 @@
         </div>
       </div>
     </div>
+
+  <!-- MODAL COMPARTILHAR QR CODE CARDÁPIO DIGITAL -->
+  <div class="modal-overlay" id="modal-compartilhar-qr-cardapio" style="display: none; z-index: 1000000; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.65); backdrop-filter: blur(5px); justify-content: center; align-items: center; padding: 16px; box-sizing: border-box;">
+    <div style="background:var(--cfg-card-bg, #ffffff); color:var(--cfg-text, #0f172a); width: 440px; max-width: 100%; border-radius: 20px; padding: 24px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.35); display: flex; flex-direction: column; align-items: center; gap: 14px; position: relative; text-align: center; border: 1px solid var(--cfg-border, #e2e8f0); max-height: 90vh; overflow-y: auto;">
+      <button onclick="document.getElementById('modal-compartilhar-qr-cardapio').style.display='none'" style="position: absolute; top: 14px; right: 14px; background: var(--cfg-subtle-bg, #f1f5f9); border: none; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; cursor: pointer; color: var(--cfg-text-muted, #64748b); transition: all 0.2s;">&times;</button>
+
+      <div style="width: 52px; height: 52px; border-radius: 16px; background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(5,150,105,0.25)); color: #059669; display: flex; align-items: center; justify-content: center; font-size: 28px;">
+        <i class="ph ph-qr-code"></i>
+      </div>
+
+      <div>
+        <h3 style="margin: 0; font-size: 19px; font-weight: 800; color:var(--cfg-text, #0f172a);" id="qr-share-cardapio-nome">Cardápio Digital</h3>
+        <p style="margin: 4px 0 0; font-size: 13px; color: var(--cfg-text-muted, #64748b);">Compartilhe o link e QR Code para seus clientes acessarem o cardápio</p>
+      </div>
+
+      <!-- QR CODE CONTAINER -->
+      <div style="background: #ffffff; padding: 14px; border-radius: 16px; border: 1.5px solid var(--cfg-border, #e2e8f0); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.06); width: 200px; height: 200px; margin: 4px 0;">
+        <img id="qr-share-cardapio-img" src="" alt="QR Code do Cardápio" style="width: 190px; height: 190px; display: block; border-radius: 4px;">
+      </div>
+
+      <!-- URL CONTAINER -->
+      <div style="width: 100%; display: flex; flex-direction: column; gap: 6px;">
+        <label style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--cfg-text-muted, #64748b); text-align: left;">Link Direto do Cardápio</label>
+        <div style="display: flex; align-items: center; gap: 6px; background: var(--cfg-subtle-bg, #f8fafc); border: 1px solid var(--cfg-border, #cbd5e1); border-radius: 10px; padding: 6px 10px;">
+          <i class="ph ph-link" style="color: #059669; font-size: 16px; flex-shrink: 0;"></i>
+          <span id="qr-share-cardapio-url" style="font-size: 12.5px; color: var(--cfg-text, #334155); font-weight: 600; flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">-</span>
+          <button id="btn-copiar-link-cardapio" onclick="window.copiarLinkCardapioQR()" style="background: #059669; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 4px; flex-shrink: 0; transition: background 0.2s;">
+            <i class="ph ph-copy"></i> Copiar
+          </button>
+        </div>
+      </div>
+
+      <!-- ACTION BUTTONS GRID -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; margin-top: 4px;">
+        <button onclick="window.compartilharWhatsAppCardapioQR()" style="padding: 10px 14px; background: #25D366; color: white; border: none; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 2px 6px rgba(37,211,102,0.3); transition: transform 0.15s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+          <i class="ph ph-whatsapp-logo" style="font-size: 17px;"></i> WhatsApp
+        </button>
+
+        <button onclick="window.compartilharNativoCardapioQR()" style="padding: 10px 14px; background: #6366f1; color: white; border: none; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 2px 6px rgba(99,102,241,0.3); transition: transform 0.15s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+          <i class="ph ph-share-network" style="font-size: 17px;"></i> Compartilhar
+        </button>
+
+        <button onclick="window.baixarPngCardapioQR()" style="padding: 10px 14px; background: var(--cfg-subtle-bg, #f1f5f9); color: var(--cfg-text, #1e293b); border: 1px solid var(--cfg-border, #cbd5e1); border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: background 0.15s;">
+          <i class="ph ph-download-simple" style="font-size: 17px;"></i> Baixar PNG
+        </button>
+
+        <button onclick="window.imprimirDisplayCardapioQR()" style="padding: 10px 14px; background: #fc4b15; color: white; border: none; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 2px 6px rgba(252,75,21,0.3); transition: transform 0.15s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+          <i class="ph ph-printer" style="font-size: 17px;"></i> Imprimir Display
+        </button>
+      </div>
+
+      <button onclick="window.abrirCardapioNovaAba()" style="width: 100%; padding: 9px; background: transparent; color: #059669; border: 1px dashed #059669; border-radius: 8px; font-size: 12.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 2px;">
+        <i class="ph ph-arrow-square-out"></i> Abrir Cardápio em Nova Aba
+      </button>
+    </div>
+  </div>
 
   <!-- MODAL QR CODE MESA -->
   <div class="modal-overlay" id="modal-qrcode-mesa" style="display: none; z-index: 1000000; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); justify-content: center; align-items: center;">

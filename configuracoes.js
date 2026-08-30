@@ -573,7 +573,7 @@ window.carregarFormasPagamento = function() {
       }
     })
     .catch(() => {});
-  if (typeof socket !== 'undefined' && socket.emit) {
+  if (typeof socket !== 'undefined' && socket && socket.emit) {
     socket.emit('get_formas_pagamento');
   }
 };
@@ -1316,7 +1316,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // --- GERENCIADOR DE DISPOSITIVOS & TERMINAIS ---
 window.carregarGerenciadorDispositivos = function () {
-  if (typeof socket !== 'undefined' && socket.emit) socket.emit('get_connected_devices');
+  if (typeof socket !== 'undefined' && socket && socket.emit) socket.emit('get_connected_devices');
 };
 
 socket.on('connected_devices', (devices) => {
@@ -8081,6 +8081,248 @@ if (btnPerfilAdmin) {
     if (socket && typeof socket.emit === 'function') socket.emit('get_restaurante_config');
   });
 }
+
+// ── COMPARTILHAMENTO DE QR CODE DO CARDÁPIO DIGITAL ──
+window.obterUrlCardapioDigitalAtual = function() {
+  const customDomain = (document.getElementById('rest-custom-domain') ? document.getElementById('rest-custom-domain').value : '').trim();
+  const slug = (document.getElementById('rest-slug') ? document.getElementById('rest-slug').value : '').trim();
+  const restId = localStorage.getItem('restaurante_id') || '1';
+  
+  if (customDomain) {
+    return customDomain.startsWith('http://') || customDomain.startsWith('https://') ? customDomain : `https://${customDomain}`;
+  }
+  if (slug) {
+    return `https://${slug}.chefcozinha.com.br`;
+  }
+  return `${window.location.origin}/cardapio.html?restaurante_id=${encodeURIComponent(restId)}`;
+};
+
+window.abrirModalCompartilharCardapioQR = function() {
+  const restNome = (document.getElementById('rest-nome') ? document.getElementById('rest-nome').value : '').trim() || localStorage.getItem('restaurante_nome') || 'Nosso Restaurante';
+  const menuUrl = window.obterUrlCardapioDigitalAtual();
+  
+  const modal = document.getElementById('modal-compartilhar-qr-cardapio');
+  if (!modal) return;
+  
+  const nomeEl = document.getElementById('qr-share-cardapio-nome');
+  const urlEl = document.getElementById('qr-share-cardapio-url');
+  const imgEl = document.getElementById('qr-share-cardapio-img');
+  
+  if (nomeEl) nomeEl.innerText = `Cardápio Digital • ${restNome}`;
+  if (urlEl) urlEl.innerText = menuUrl;
+  
+  if (typeof window.gerarQrDataUrl === 'function') {
+    window.gerarQrDataUrl(menuUrl, 360, function(dataUrl) {
+      if (imgEl) imgEl.src = dataUrl;
+    });
+  } else if (typeof window.qrcode === 'function') {
+    try {
+      const qr = window.qrcode(0, 'M');
+      qr.addData(menuUrl);
+      qr.make();
+      if (imgEl) imgEl.src = qr.createDataURL(6, 0);
+    } catch(e) {}
+  }
+  
+  modal.style.display = 'flex';
+};
+
+window.copiarLinkCardapioQR = function() {
+  const menuUrl = window.obterUrlCardapioDigitalAtual();
+  const btn = document.getElementById('btn-copiar-link-cardapio');
+  
+  const finishCopy = () => {
+    if (btn) {
+      const oldHtml = btn.innerHTML;
+      btn.innerHTML = '<i class="ph ph-check"></i> Copiado!';
+      btn.style.background = '#16a34a';
+      setTimeout(() => {
+        btn.innerHTML = oldHtml;
+        btn.style.background = '#059669';
+      }, 2000);
+    }
+    if (typeof showToast === 'function') showToast('Link do cardápio copiado com sucesso!', 'success');
+  };
+  
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(menuUrl).then(finishCopy).catch(() => {
+      prompt('Copie o link do cardápio:', menuUrl);
+    });
+  } else {
+    prompt('Copie o link do cardápio:', menuUrl);
+  }
+};
+
+window.compartilharWhatsAppCardapioQR = function() {
+  const restNome = (document.getElementById('rest-nome') ? document.getElementById('rest-nome').value : '').trim() || localStorage.getItem('restaurante_nome') || 'Nosso Estabelecimento';
+  const menuUrl = window.obterUrlCardapioDigitalAtual();
+  const msg = `🍽️ Olá! Confira o nosso cardápio digital e faça seus pedidos diretamente pelo celular:\n\n👉 ${menuUrl}\n\n*${restNome}*`;
+  const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+  window.open(waUrl, '_blank');
+};
+
+window.compartilharNativoCardapioQR = function() {
+  const restNome = (document.getElementById('rest-nome') ? document.getElementById('rest-nome').value : '').trim() || localStorage.getItem('restaurante_nome') || 'Nosso Estabelecimento';
+  const menuUrl = window.obterUrlCardapioDigitalAtual();
+  
+  if (navigator.share) {
+    navigator.share({
+      title: `Cardápio Digital - ${restNome}`,
+      text: `Confira o cardápio digital de ${restNome} e faça seus pedidos online!`,
+      url: menuUrl
+    }).catch((err) => {
+      if (err && err.name !== 'AbortError') window.copiarLinkCardapioQR();
+    });
+  } else {
+    window.copiarLinkCardapioQR();
+  }
+};
+
+window.baixarPngCardapioQR = function() {
+  const imgEl = document.getElementById('qr-share-cardapio-img');
+  if (!imgEl || !imgEl.src) {
+    if (typeof showToast === 'function') showToast('QR Code ainda não carregado.', 'warning');
+    return;
+  }
+  const slug = (document.getElementById('rest-slug') ? document.getElementById('rest-slug').value : '').trim() || 'restaurante';
+  const a = document.createElement('a');
+  a.href = imgEl.src;
+  a.download = `qrcode-cardapio-${slug}.png`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  if (typeof showToast === 'function') showToast('Download do QR Code iniciado!', 'success');
+};
+
+window.imprimirDisplayCardapioQR = function() {
+  const restNome = (document.getElementById('rest-nome') ? document.getElementById('rest-nome').value : '').trim() || localStorage.getItem('restaurante_nome') || 'Nosso Restaurante';
+  const menuUrl = window.obterUrlCardapioDigitalAtual();
+  const imgEl = document.getElementById('qr-share-cardapio-img');
+  const qrSrc = imgEl ? imgEl.src : '';
+  
+  const win = window.open('', '_blank');
+  if (!win) {
+    alert('Por favor, permita popups para imprimir o display do QR Code.');
+    return;
+  }
+  
+  win.document.write(`
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="UTF-8">
+      <title>Display Cardápio QR Code - \${restNome}</title>
+      <style>
+        @page { size: A4 portrait; margin: 10mm; }
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+          margin: 0;
+          padding: 20px;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          min-height: 100vh;
+          background: #f8fafc;
+          box-sizing: border-box;
+        }
+        .display-card {
+          width: 320px;
+          background: #ffffff;
+          border: 2px solid #e2e8f0;
+          border-radius: 24px;
+          padding: 32px 24px;
+          text-align: center;
+          box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 16px;
+        }
+        .badge {
+          background: #fff0e6;
+          color: #fc4b15;
+          font-size: 12px;
+          font-weight: 800;
+          padding: 6px 14px;
+          border-radius: 99px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        .title {
+          font-size: 22px;
+          font-weight: 800;
+          color: #0f172a;
+          margin: 0;
+        }
+        .subtitle {
+          font-size: 14px;
+          color: #64748b;
+          margin: 0;
+        }
+        .qr-wrapper {
+          background: #ffffff;
+          padding: 16px;
+          border-radius: 18px;
+          border: 2px solid #f1f5f9;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+          width: 220px;
+          height: 220px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .qr-wrapper img {
+          width: 200px;
+          height: 200px;
+          display: block;
+        }
+        .instructions {
+          font-size: 13px;
+          font-weight: 700;
+          color: #334155;
+          background: #f8fafc;
+          padding: 10px 16px;
+          border-radius: 12px;
+          width: 100%;
+          box-sizing: border-box;
+        }
+        .url-text {
+          font-size: 11px;
+          color: #94a3b8;
+          word-break: break-all;
+        }
+        @media print {
+          body { background: transparent; padding: 0; }
+          .display-card { box-shadow: none; border: 1.5px solid #cbd5e1; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="display-card">
+        <div class="badge">Cardápio Digital</div>
+        <h1 class="title">\${restNome}</h1>
+        <p class="subtitle">Acesse nosso cardápio online direto pelo seu celular</p>
+        <div class="qr-wrapper">
+          <img src="\${qrSrc}" alt="QR Code" />
+        </div>
+        <div class="instructions">📱 Aponte a câmera do celular para o QR Code</div>
+        <div class="url-text">\${menuUrl}</div>
+      </div>
+      <script>
+        window.onload = function() {
+          setTimeout(function() { window.print(); }, 400);
+        };
+      <\/script>
+    </body>
+    </html>
+  `);
+  win.document.close();
+};
+
+window.abrirCardapioNovaAba = function() {
+  const menuUrl = window.obterUrlCardapioDigitalAtual();
+  window.open(menuUrl, '_blank');
+};
 
 // ── PINs TEMPORARIOS ──
 (function() {

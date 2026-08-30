@@ -1,6 +1,15 @@
 
-var socket = window.socket || (typeof io !== 'undefined' ? io({ query: { token: localStorage.getItem('chef_token'), restaurante_id: localStorage.getItem('restaurante_id') || '1' } }) : null);
-window.socket = socket;
+var socket = (typeof window !== 'undefined' && window.socket) || (typeof io !== 'undefined' ? io({ query: { token: localStorage.getItem('chef_token'), restaurante_id: localStorage.getItem('restaurante_id') || '1' } }) : {
+  emit: function() { return this; },
+  on: function() { return this; },
+  once: function() { return this; },
+  off: function() { return this; },
+  disconnect: function() {},
+  connect: function() {},
+  connected: false,
+  io: { opts: { query: {} } }
+});
+if (typeof window !== 'undefined') window.socket = socket;
 
   // ─── TERMOS DE USO & ONBOARDING INTELIGENTE COM DEEP RESEARCH ───
   window.wizardToggleTerms = function() {
@@ -371,7 +380,7 @@ window.obterInfoDetalhadaDispositivo = function () {
 };
 
 window.enviarRegistroSessaoDetalhado = function () {
-  if (typeof socket !== 'undefined' && socket.emit) {
+  if (typeof socket !== 'undefined' && socket && socket.emit) {
     const dev = window.obterInfoDetalhadaDispositivo();
     const userLogado = localStorage.getItem('logged_user') || localStorage.getItem('usuarioLogado') || (document.getElementById('status-user-name') ? document.getElementById('status-user-name').innerText.trim() : 'Operador');
     const cargoLogado = localStorage.getItem('cargoLogado') || 'Caixa / PDV';
@@ -425,7 +434,7 @@ document.addEventListener('click', (e) => {
   if (!btn) return;
   const label = (btn.innerText || btn.title || btn.ariaLabel || btn.value || btn.id || btn.className || 'Botao').trim().replace(/\s+/g, ' ').substring(0, 50);
   const pagina = window.location.pathname.split('/').pop() || 'index.html';
-  if (typeof socket !== 'undefined' && socket.emit) {
+  if (typeof socket !== 'undefined' && socket && socket.emit) {
     socket.emit('registrar_clique_botao', { botao: label, pagina });
   }
 }, true);
@@ -1578,9 +1587,11 @@ window.mostrarQrSepararContaMesa = function(nomeMesa) {
 })();
 
 const HOST = window.location.hostname || 'localhost';
-if (!socket && typeof io !== 'undefined') {
-  socket = io({ query: { token: localStorage.getItem('chef_token'), restaurante_id: localStorage.getItem('restaurante_id') || '1' } });
-  window.socket = socket;
+if ((!socket || socket._isFallback || !socket.connected) && typeof io !== 'undefined') {
+  try {
+    socket = io({ query: { token: localStorage.getItem('chef_token'), restaurante_id: localStorage.getItem('restaurante_id') || '1' } });
+    window.socket = socket;
+  } catch(e) {}
 }
 if (socket && typeof initChefTz === 'function') initChefTz(socket);
 
@@ -1590,21 +1601,25 @@ if (socket && window.ChefPluginLoader) window.ChefPluginLoader.init(socket, { cu
 // Modo Totem remoto (quiosque): registra aqui, pois o socket já existe neste ponto.
 if (socket && socket.on) {
   socket.on('modo_dispositivo', (data) => window.aplicarModoTotem(data && data.modo));
-  socket.emit('get_modo_dispositivo', { serial: window.obterSerialDispositivo() });
+  if (socket.emit) socket.emit('get_modo_dispositivo', { serial: window.obterSerialDispositivo() });
 }
 
-socket.on('tenant_atualizado', (data) => {
-  if (data && data.restaurante_id) {
-    localStorage.setItem('restaurante_id', data.restaurante_id);
-  }
-  if (data && data.token) {
-    localStorage.setItem('chef_token', data.token);
-  }
-  // Reconecta o socket com as novas credenciais do tenant
-  socket.disconnect();
-  socket.io.opts.query = { token: data.token, restaurante_id: String(data.restaurante_id) };
-  socket.connect();
-});
+if (socket && socket.on) {
+  socket.on('tenant_atualizado', (data) => {
+    if (data && data.restaurante_id) {
+      localStorage.setItem('restaurante_id', data.restaurante_id);
+    }
+    if (data && data.token) {
+      localStorage.setItem('chef_token', data.token);
+    }
+    // Reconecta o socket com as novas credenciais do tenant
+    try {
+      if (socket.disconnect) socket.disconnect();
+      if (socket.io && socket.io.opts) socket.io.opts.query = { token: data.token, restaurante_id: String(data.restaurante_id) };
+      if (socket.connect) socket.connect();
+    } catch(e) {}
+  });
+}
 
 let serverIp = HOST;
 let restCustomDomain = '';
