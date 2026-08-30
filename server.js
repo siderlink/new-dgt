@@ -116,6 +116,7 @@ const os = require('os');
 let sqlite3;
 try {
   sqlite3 = require('sqlite3').verbose();
+  const _test = new sqlite3.Database(':memory:');
 } catch (e) {
   sqlite3 = require('./sqlite3-adapter').verbose();
 }
@@ -363,34 +364,6 @@ function promptCertAtStartup() {
   let active = getActiveCertConfig();
   if (active && !candidates.includes(active.file)) active = null;
   let chosenFile = active ? active.file : candidates[0];
-
-  if (process.stdin.isTTY === true) {
-    console.log('');
-    console.log('==========================================');
-    console.log(' Escolha o certificado SSL desta sessão:');
-    candidates.forEach((f, i) => {
-      const mark = active && active.file === f ? ' [ATIVO]' : '';
-      console.log('   ' + (i + 1) + ') ' + f + mark);
-    });
-    const def = active ? candidates.indexOf(active.file) + 1 : 1;
-    console.log(' (Enter para manter: ' + def + ')');
-    process.stdout.write('> ');
-    let input = '';
-    try {
-      const buf = Buffer.alloc(256);
-      let bytes;
-      while ((bytes = fs.readSync(0, buf, 0, buf.length, null)) > 0) {
-        const s = buf.toString('utf8', 0, bytes);
-        input += s;
-        if (s.indexOf('\n') !== -1 || s.indexOf('\r') !== -1) break;
-      }
-    } catch (e) { input = ''; }
-    input = input.trim();
-    let idx = parseInt(input, 10);
-    if (input === '' || isNaN(idx)) idx = def;
-    if (idx < 1 || idx > candidates.length) idx = def;
-    chosenFile = candidates[idx - 1];
-  }
 
   let passphrase = CERT_PASSPHRASE;
   if (active && active.file === chosenFile) passphrase = active.passphrase;
@@ -9335,13 +9308,7 @@ app.post('/api/restore', verificarToken, upload.single('backup'), (req, res) => 
     });
   });
 });
-let PORT = parseInt(process.env.PORT, 10) || 3000;
-try {
-  const portFilePath = path.join(__dirname, 'port.txt');
-  if (fs.existsSync(portFilePath) && !process.env.PORT) {
-    PORT = parseInt(fs.readFileSync(portFilePath, 'utf8').trim());
-  }
-} catch (e) { }
+let PORT = 3000;
 function getLocalIp() {
   const interfaces = os.networkInterfaces();
   for (const name of Object.keys(interfaces)) {
