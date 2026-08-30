@@ -476,6 +476,8 @@ function seedTenantFuncionariosPadrao(targetDb, restauranteId, done) {
       targetDb.run(`ALTER TABLE funcionarios ADD COLUMN pin_hash TEXT`, () => {});
       targetDb.run(`ALTER TABLE funcionarios ADD COLUMN restaurante_id INTEGER`, () => {});
       targetDb.run(`ALTER TABLE funcionarios ADD COLUMN status TEXT DEFAULT 'Ativo'`, () => {});
+      targetDb.run(`ALTER TABLE funcionarios ADD COLUMN qr_token TEXT`, () => {});
+      targetDb.run(`ALTER TABLE clientes ADD COLUMN qr_token TEXT`, () => {});
 
       defaultStaff.forEach((st) => {
         let hashSenha = st.senha;
@@ -2209,6 +2211,8 @@ db.serialize(() => {
 
   db.run(`ALTER TABLE vales ADD COLUMN observacao TEXT`, (err) => { });
   db.run(`ALTER TABLE funcionarios ADD COLUMN pin_hash TEXT`, (err) => { });
+  db.run(`ALTER TABLE funcionarios ADD COLUMN qr_token TEXT`, (err) => { });
+  db.run(`ALTER TABLE clientes ADD COLUMN qr_token TEXT`, (err) => { });
   db.run(`ALTER TABLE dias_atipicos ADD COLUMN forma_pagamento TEXT DEFAULT 'proximo_pagamento'`, (err) => { });
 
   db.run(`
@@ -11596,23 +11600,33 @@ app.post('/api/auth/trocar-restaurante', (req, res) => {
 
 // ── Funcionários ──
 app.get('/api/funcionarios', (req, res) => {
-  db.all('SELECT id, nome, usuario, cargo, status, valor_hora, tipo_remuneracao, valor_dia, valor_semana, valor_mes, chave_pix, cpf, telefone, observacao_rh, data_cadastro FROM funcionarios ORDER BY id DESC', [], (err, rows) => {
+  db.all('SELECT id, nome, usuario, cargo, status, valor_hora, tipo_remuneracao, valor_dia, valor_semana, valor_mes, chave_pix, cpf, telefone, observacao_rh, data_cadastro, qr_token FROM funcionarios ORDER BY id DESC', [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.json(rows || []);
+    const list = rows || [];
+    // Garante que todos possuam um qr_token único para seus crachás
+    list.forEach(f => {
+      if (!f.qr_token) {
+        const generatedToken = 'COLAB-' + f.id + '-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+        f.qr_token = generatedToken;
+        db.run('UPDATE funcionarios SET qr_token = ? WHERE id = ?', [generatedToken, f.id], () => {});
+      }
+    });
+    res.json(list);
   });
 });
 
 app.post('/api/funcionarios', (req, res) => {
   const { nome, usuario, senha, cargo, valor_hora, tipo_remuneracao, valor_dia, valor_semana, valor_mes, chave_pix, cpf, telefone, observacao_rh } = req.body || {};
   if (!nome) return res.status(400).json({ error: 'Nome é obrigatório.' });
+  const generatedToken = 'COLAB-' + Math.random().toString(36).substring(2, 10).toUpperCase();
 
   db.run(
-    `INSERT INTO funcionarios (nome, usuario, senha, cargo, valor_hora, tipo_remuneracao, valor_dia, valor_semana, valor_mes, chave_pix, cpf, telefone, observacao_rh, data_cadastro)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))`,
-    [nome, usuario || '', senha || '1234', cargo || 'Atendente', valor_hora || 0, tipo_remuneracao || 'hora', valor_dia || 0, valor_semana || 0, valor_mes || 0, chave_pix || '', cpf || '', telefone || '', observacao_rh || ''],
+    `INSERT INTO funcionarios (nome, usuario, senha, cargo, valor_hora, tipo_remuneracao, valor_dia, valor_semana, valor_mes, chave_pix, cpf, telefone, observacao_rh, data_cadastro, qr_token)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'), ?)`,
+    [nome, usuario || '', senha || '1234', cargo || 'Atendente', valor_hora || 0, tipo_remuneracao || 'hora', valor_dia || 0, valor_semana || 0, valor_mes || 0, chave_pix || '', cpf || '', telefone || '', observacao_rh || '', generatedToken],
     function (err) {
       if (err) return res.status(500).json({ error: err.message });
-      res.json({ success: true, id: this.lastID });
+      res.json({ success: true, id: this.lastID, qr_token: generatedToken });
     }
   );
 });
@@ -11622,6 +11636,204 @@ app.delete('/api/funcionarios/:id', (req, res) => {
   db.run('DELETE FROM funcionarios WHERE id = ?', [id], function (err) {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ success: true });
+  });
+});
+
+// Regenerar QR Token do Crachá do Colaborador (Ex: perda de crachá físico)
+app.post('/api/funcionarios/:id/regenerar-qr', (req, res) => {
+  const id = req.params.id;
+  const novoToken = 'COLAB-' + id + '-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+  db.run('UPDATE funcionarios SET qr_token = ? WHERE id = ?', [novoToken, id], function (err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true, qr_token: novoToken });
+  });
+});
+
+// ── QR Code Authentication (Crachás de Colaboradores e Identificação no PDV/Totem) ──
+function handlerLoginQrCodeColaborador(req, res) {
+  const { qrcode_token, estacao } = req.body || {};
+  if (!qrcode_token) {
+    return res.status(400).json({ success: false, error: 'Código QR não informado.' });
+  }
+
+  let tokenLimpo = String(qrcode_token).trim();
+  // Suporte a prefixos: CHEF-COLAB:ID:TOKEN ou JSON
+  let funcIdFromQr = null;
+  if (tokenLimpo.startsWith('CHEF-COLAB:')) {
+    const parts = tokenLimpo.split(':');
+    if (parts.length >= 3) {
+      funcIdFromQr = parseInt(parts[1], 10);
+      tokenLimpo = parts[2];
+    } else if (parts.length === 2) {
+      tokenLimpo = parts[1];
+    }
+  } else if (tokenLimpo.startsWith('{') && tokenLimpo.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(tokenLimpo);
+      if (parsed.token) tokenLimpo = parsed.token;
+      if (parsed.id) funcIdFromQr = parsed.id;
+    } catch(e) {}
+  }
+
+  const query = funcIdFromQr
+    ? 'SELECT * FROM funcionarios WHERE (id = ? AND qr_token = ?) OR qr_token = ? OR (id = ? AND status = "Ativo") LIMIT 1'
+    : 'SELECT * FROM funcionarios WHERE qr_token = ? OR usuario = ? LIMIT 1';
+  const params = funcIdFromQr ? [funcIdFromQr, tokenLimpo, tokenLimpo, funcIdFromQr] : [tokenLimpo, tokenLimpo];
+
+  db.get(query, params, (err, funcionario) => {
+    if (err) return res.status(500).json({ success: false, error: 'Erro de banco de dados.' });
+    if (!funcionario) {
+      return res.status(404).json({ success: false, error: 'Crachá ou QR Code não reconhecido no sistema.' });
+    }
+
+    if (funcionario.status && funcionario.status.toLowerCase() !== 'ativo') {
+      return res.status(403).json({ success: false, error: 'Colaborador inativo no restaurante.' });
+    }
+
+    // Gerar JWT de autenticação para a sessão
+    const restauranteId = funcionario.restaurante_id || 1;
+    const token = jwt.sign(
+      {
+        id: funcionario.id,
+        nome: funcionario.nome,
+        usuario: funcionario.usuario,
+        cargo: funcionario.cargo,
+        role: ['Admin', 'Administrador', 'adm', 'Gerente'].includes(funcionario.cargo) ? 'admin' : 'funcionario',
+        restaurante_id: restauranteId,
+        estacao: estacao || 'PDV_TOTEM'
+      },
+      JWT_SECRET,
+      { expiresIn: '90d' }
+    );
+
+    // Registra auditoria/log de liberação
+    try {
+      if (typeof registrarAuditoria === 'function') {
+        registrarAuditoria(funcionario.nome, 'ACESSO_QRCODE', `Estação ${estacao || 'PDV/Totem'} liberada via Crachá QR Code por ${funcionario.nome} (${funcionario.cargo}).`, 'Segurança / Crachá', 'BAIXO');
+      }
+    } catch(e) {}
+
+    res.json({
+      success: true,
+      token,
+      restaurante_id: restauranteId,
+      funcionario: {
+        id: funcionario.id,
+        nome: funcionario.nome,
+        usuario: funcionario.usuario,
+        cargo: funcionario.cargo,
+        status: funcionario.status,
+        qr_token: funcionario.qr_token
+      }
+    });
+  });
+}
+
+app.post('/api/auth/qr-login-colaborador', handlerLoginQrCodeColaborador);
+app.post('/api/auth/login-qrcode-colaborador', handlerLoginQrCodeColaborador);
+
+// ── Identificação do Cliente por QR Code (Totem & App do Garçom) ──
+app.post('/api/auth/qr-identificar-cliente', (req, res) => {
+  const { qrcode_token, telefone, cliente_id } = req.body || {};
+  let tokenLimpo = String(qrcode_token || '').trim();
+
+  let cliId = cliente_id || null;
+  let tel = telefone || null;
+
+  if (tokenLimpo.startsWith('CHEF-CLI:')) {
+    const parts = tokenLimpo.split(':');
+    if (parts.length >= 3) {
+      cliId = parseInt(parts[1], 10);
+      tokenLimpo = parts[2];
+    } else if (parts.length === 2) {
+      tokenLimpo = parts[1];
+    }
+  } else if (tokenLimpo.startsWith('{') && tokenLimpo.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(tokenLimpo);
+      if (parsed.id) cliId = parsed.id;
+      if (parsed.telefone) tel = parsed.telefone;
+      if (parsed.token) tokenLimpo = parsed.token;
+    } catch(e) {}
+  }
+
+  // Tenta localizar por id, qr_token, ou telefone
+  let query = 'SELECT * FROM clientes WHERE 1=0';
+  let params = [];
+  if (cliId) {
+    query = 'SELECT * FROM clientes WHERE id = ? OR qr_token = ? OR telefone = ? LIMIT 1';
+    params = [cliId, tokenLimpo, tokenLimpo];
+  } else if (tokenLimpo) {
+    query = 'SELECT * FROM clientes WHERE qr_token = ? OR telefone = ? OR id = ? LIMIT 1';
+    params = [tokenLimpo, tokenLimpo, parseInt(tokenLimpo, 10) || 0];
+  } else if (tel) {
+    query = 'SELECT * FROM clientes WHERE telefone = ? LIMIT 1';
+    params = [tel];
+  }
+
+  db.get(query, params, (err, cliente) => {
+    if (err) return res.status(500).json({ success: false, error: err.message });
+    if (!cliente) {
+      // Se não encontrou e tem telefone numérico, busca flexível
+      const telNum = (tokenLimpo || tel || '').replace(/\D/g, '');
+      if (telNum.length >= 8) {
+        return db.get('SELECT * FROM clientes WHERE telefone LIKE ? LIMIT 1', [`%${telNum}%`], (err2, cliente2) => {
+          if (cliente2) {
+            return res.json({ success: true, cliente: cliente2 });
+          }
+          return res.status(404).json({ success: false, error: 'Cliente não encontrado pelo QR Code.' });
+        });
+      }
+      return res.status(404).json({ success: false, error: 'Cliente não encontrado pelo QR Code.' });
+    }
+
+    // Atualiza último checkin
+    db.run('UPDATE clientes SET ultimo_checkin = datetime("now", "localtime") WHERE id = ?', [cliente.id], () => {});
+
+    res.json({
+      success: true,
+      cliente: {
+        id: cliente.id,
+        nome: cliente.nome,
+        telefone: cliente.telefone,
+        pontos: cliente.pontos || 0,
+        nivel: cliente.nivel || 'Bronze',
+        total_gasto: cliente.total_gasto || 0,
+        endereco: cliente.endereco || '',
+        observacao: cliente.observacao || '',
+        qr_token: cliente.qr_token || ('CLI-' + cliente.id)
+      }
+    });
+  });
+});
+
+// ── Obter ou Gerar QR do Cliente (Área do Cliente) ──
+app.get('/api/cliente/meu-qr', (req, res) => {
+  const { telefone, id } = req.query || {};
+  let query = 'SELECT * FROM clientes WHERE id = ? OR telefone = ? LIMIT 1';
+  let params = [parseInt(id, 10) || 0, telefone || ''];
+
+  db.get(query, params, (err, cliente) => {
+    if (err || !cliente) {
+      return res.status(404).json({ success: false, error: 'Cliente não localizado.' });
+    }
+    if (!cliente.qr_token) {
+      const generated = 'CLI-' + cliente.id + '-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+      db.run('UPDATE clientes SET qr_token = ? WHERE id = ?', [generated, cliente.id], () => {});
+      cliente.qr_token = generated;
+    }
+    res.json({
+      success: true,
+      qr_payload: `CHEF-CLI:${cliente.id}:${cliente.qr_token}`,
+      cliente: {
+        id: cliente.id,
+        nome: cliente.nome,
+        telefone: cliente.telefone,
+        pontos: cliente.pontos || 0,
+        nivel: cliente.nivel || 'Bronze',
+        qr_token: cliente.qr_token
+      }
+    });
   });
 });
 

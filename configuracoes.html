@@ -12,6 +12,8 @@
   <!-- QR Code local (funciona sem internet) -->
   <script src="/vendor/qrcode/qrcode-generator.js"></script>
   <script src="/vendor/qrcode/qr-helper.js"></script>
+  <script src="/vendor/html5-qrcode/html5-qrcode.min.js"></script>
+  <script src="/qr-auth-badge.js"></script>
   <style>
     :root, [data-theme="light"] {
       --cfg-bg: #f4f4f5;
@@ -3620,9 +3622,16 @@
 
         <!-- CARD 4: TABELA DE COLABORADORES ATIVOS -->
         <div style="background:var(--cfg-card-bg); border:1.5px solid var(--cfg-border); border-radius:16px; padding:22px; box-shadow:0 4px 15px rgba(0,0,0,0.03);">
-          <h3 style="margin:0 0 16px 0; font-size:17px; font-weight:800; color:var(--cfg-heading); display:flex; align-items:center; gap:8px;">
-            <i class="ph-bold ph-users" style="color:#3b82f6; font-size:20px;"></i> Colaboradores Ativos no Sistema
-          </h3>
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
+            <h3 style="margin:0; font-size:17px; font-weight:800; color:var(--cfg-heading); display:flex; align-items:center; gap:8px;">
+              <i class="ph-bold ph-users" style="color:#3b82f6; font-size:20px;"></i> Colaboradores Ativos no Sistema
+            </h3>
+            <div style="display:flex; gap:8px;">
+              <button onclick="window.imprimirTodosCrachas()" style="padding:8px 16px; background:#0f172a; color:#ffffff; border:none; border-radius:8px; font-weight:800; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:6px; box-shadow:0 2px 6px rgba(0,0,0,0.15);">
+                <i class="ph-bold ph-printer"></i> Imprimir Crachás em Lote (A4)
+              </button>
+            </div>
+          </div>
           <div class="tab-table-scroll" style="border:1px solid var(--cfg-border); border-radius:12px; overflow-x:auto;">
             <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13.5px;">
               <thead>

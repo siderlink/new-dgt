@@ -12,6 +12,12 @@ var socket = (typeof window !== 'undefined' && window.socket) || (typeof io !== 
 if (typeof window !== 'undefined') window.socket = socket;
 
   // ─── TERMOS DE USO & ONBOARDING INTELIGENTE COM DEEP RESEARCH ───
+  window._wizardStep = 0;
+  window._wizardTotal = 3;
+  window._wizardProdutos = [];
+  window._wizardModoMesas = 'exemplos';
+  window._wizardActive = false;
+
   window.wizardToggleTerms = function() {
     const chk = document.getElementById('wiz-terms-check');
     const btn = document.getElementById('wiz-btn-start');
@@ -27,44 +33,30 @@ if (typeof window !== 'undefined') window.socket = socket;
     }
   };
 
-  let _avisoGeoExibido = false;
-  let _timerAvisoGeo = null;
-  function _avisarGeoIndisponivel() {
-    if (_avisoGeoExibido) return;
-    _avisoGeoExibido = true;
-    const msg = 'Infelizmente não conseguimos localizar os dados do estabelecimento automaticamente. Sem problemas: você pode preencher tudo manualmente, digitando como antes.';
-    if (typeof window.showToast === 'function') window.showToast(msg, 'warning');
-    else alert(msg);
-  }
-
   window.wizardStartFromTerms = function() {
     const chk = document.getElementById('wiz-terms-check');
     if (!chk || !chk.checked) {
-      alert('Por favor, leia e aceite os Termos de Uso para continuar.');
+      if (typeof window.showToast === 'function') window.showToast('Por favor, leia e aceite os Termos de Uso para continuar.', 'warning');
+      else alert('Por favor, leia e aceite os Termos de Uso para continuar.');
       return;
     }
 
-    const btn = document.getElementById('wiz-btn-start');
-    if (btn) {
-      btn.innerHTML = '<i class="ph-bold ph-spinner ph-spin"></i> <span>Iniciando Inteligência de Cadastro...</span>';
+    // 1. Imediatamente avança para o Passo 1 (Dados do Estabelecimento)
+    window._wizardStep = 1;
+    if (typeof window._renderWizardStep === 'function') {
+      window._renderWizardStep();
+    } else if (typeof _renderWizardStep === 'function') {
+      _renderWizardStep();
     }
 
-    _avisoGeoExibido = false;
-    if (_timerAvisoGeo) { clearTimeout(_timerAvisoGeo); _timerAvisoGeo = null; }
-
-    // 1. Pede a localização ao clicar em Continuar
+    // 2. Com o passo 1 já visível, inicia suavemente a busca de GPS e Deep Research em background (sem alert bloqueante)
     if (navigator.geolocation) {
-      // Fallback informativo: se em ~3s não conseguir localizar, orienta a digitar manualmente
-      _timerAvisoGeo = setTimeout(_avisarGeoIndisponivel, 3000);
-
       navigator.geolocation.getCurrentPosition(
         function(pos) {
-          if (_timerAvisoGeo) { clearTimeout(_timerAvisoGeo); _timerAvisoGeo = null; }
           const lat = parseFloat(pos.coords.latitude.toFixed(6));
           const lng = parseFloat(pos.coords.longitude.toFixed(6));
           const prec = Math.round(pos.coords.accuracy);
 
-          // Salva coordenadas nos campos ocultos
           const latInp = document.getElementById('wiz-geo-lat');
           const lngInp = document.getElementById('wiz-geo-lng');
           const precInp = document.getElementById('wiz-geo-precisao');
@@ -72,10 +64,9 @@ if (typeof window !== 'undefined') window.socket = socket;
           if (lngInp) lngInp.value = lng;
           if (precInp) precInp.value = prec;
 
-          // Emite alerta em tempo real para o Super Admin
           if (typeof socket !== 'undefined' && socket && socket.emit) {
             socket.emit('novo_cadastro_saas', {
-              restauranteNome: 'Cadastro Iniciado (Localização GPS Detectada)',
+              restauranteNome: 'Cadastro Iniciado (GPS Detectado)',
               nome: 'Novo Cliente',
               etapa: '1-dados-estabelecimento',
               lat: lat,
@@ -84,17 +75,10 @@ if (typeof window !== 'undefined') window.socket = socket;
             });
           }
 
-          // Dispara Deep Research em background para preencher os campos do restaurante
           _executarDeepResearchPorLocalizacao(lat, lng);
-
-          // Avança para o Passo 1
-          _avancarParaPasso1();
         },
         function(err) {
-          if (_timerAvisoGeo) { clearTimeout(_timerAvisoGeo); _timerAvisoGeo = null; }
-          _avisarGeoIndisponivel();
-          console.warn('[Geo Permission Ignored/Failed]', err);
-          // Emite alerta mesmo com fallback de IP
+          console.warn('[Geo Permission Ignored/Unavailable]', err);
           if (typeof socket !== 'undefined' && socket && socket.emit) {
             socket.emit('novo_cadastro_saas', {
               restauranteNome: 'Novo Cadastro Iniciado',
@@ -102,20 +86,11 @@ if (typeof window !== 'undefined') window.socket = socket;
               etapa: '1-dados-estabelecimento'
             });
           }
-          _avancarParaPasso1();
         },
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+        { enableHighAccuracy: true, timeout: 6000, maximumAge: 60000 }
       );
-    } else {
-      _avisarGeoIndisponivel();
-      _avancarParaPasso1();
     }
   };
-
-  function _avancarParaPasso1() {
-    _wizardStep = 0;
-    _renderWizardStep();
-  }
 
   function _executarDeepResearchPorLocalizacao(lat, lng) {
     fetch('/api/ia/pesquisar-estabelecimento-geo', {
@@ -132,7 +107,7 @@ if (typeof window !== 'undefined') window.socket = socket;
         const telEl = document.getElementById('wiz-rest-tel');
         const donoEl = document.getElementById('wiz-dono-nome');
 
-        // Preenche dados do restaurante
+        // Preenche dados do restaurante se ainda estiverem vazios
         if (nomeEl && (!nomeEl.value || nomeEl.value.length < 3) && d.nome && d.nome !== 'Meu Restaurante') {
           nomeEl.value = d.nome;
           nomeEl.style.borderColor = '#10b981';
@@ -152,21 +127,21 @@ if (typeof window !== 'undefined') window.socket = socket;
 
         // Pré-carrega o cardápio e produtos identificados
         if (Array.isArray(d.produtos) && d.produtos.length > 0) {
-          _wizardProdutos = d.produtos;
-          if (typeof _renderWizProdutos === 'function') {
+          window._wizardProdutos = d.produtos;
+          if (typeof window._renderWizProdutos === 'function') {
+            window._renderWizProdutos();
+          } else if (typeof _renderWizProdutos === 'function') {
             _renderWizProdutos();
           }
         }
 
         if (typeof window.showToast === 'function') {
-          const msg = d.avaliacao ? '✨ Google Meu Negócio identificado (' + d.avaliacao + ')! Dados e cardápio pré-cadastrados.' : '✨ Estabelecimento identificado! Dados e cardápio pré-cadastrados.';
+          const msg = d.avaliacao ? '✨ Google Meu Negócio identificado (' + d.avaliacao + ')! Dados pré-preenchidos.' : '✨ Estabelecimento identificado! Dados pré-preenchidos.';
           window.showToast(msg, 'success');
         }
-      } else {
-        _avisarGeoIndisponivel();
       }
     })
-    .catch(err => { console.warn('[DeepResearch Error]', err); _avisarGeoIndisponivel(); });
+    .catch(err => { console.warn('[DeepResearch Error]', err); });
   }
 
 
@@ -3624,25 +3599,29 @@ document.addEventListener('DOMContentLoaded', () => {
   /* ═══════════════════════════════════════════════════════════════ */
   /* ONBOARDING WIZARD — 3 passos (Dados, Mesas, Produtos)         */
   /* ═══════════════════════════════════════════════════════════════ */
-  let _wizardStep = 1;
-  const _wizardTotal = 3;
-  let _wizardProdutos = []; /* [{categoria, nome, preco}] */
-let _wizardModoMesas = 'exemplos'; /* 'exemplos' | 'zero' */
-  let _wizardActive = false; /* evita re-exibição pelo fetchPdvConfigs */
+  var _wizardStep = window._wizardStep !== undefined ? window._wizardStep : 1;
+  var _wizardTotal = 3;
+  var _wizardProdutos = window._wizardProdutos || []; /* [{categoria, nome, preco}] */
+  var _wizardModoMesas = window._wizardModoMesas || 'exemplos'; /* 'exemplos' | 'zero' */
+  var _wizardActive = false; /* evita re-exibição pelo fetchPdvConfigs */
 
   window.showWizard = function() {
     if (_wizardActive) return; /* já aberto, ignora */
     const el = document.getElementById('onboarding-wizard');
     if (!el) return;
     _wizardActive = true;
+    window._wizardActive = true;
     el.classList.remove('hidden');
     _wizardStep = 0;
+    window._wizardStep = 0;
     _wizardProdutos = [];
+    window._wizardProdutos = [];
     _renderWizardStep();
     _renderWizProdutos();
   };
 
   function _renderWizardStep() {
+    if (window._wizardStep !== undefined) _wizardStep = window._wizardStep;
     _attachWizardInputMasks();
     for (let i = 0; i <= 4; i++) {
       const panel = document.getElementById('wizard-panel-' + i);
@@ -3695,6 +3674,7 @@ let _wizardModoMesas = 'exemplos'; /* 'exemplos' | 'zero' */
       if (chk && _wizardModoMesas === 'zero' && !chk.dataset.touched) chk.checked = true;
     }
   }
+  window._renderWizardStep = _renderWizardStep;
 
   function _updateMesasPreview() {
     const preview = document.getElementById('wiz-mesas-preview');
@@ -11240,3 +11220,81 @@ document.addEventListener('drop', (e) => {
     }
   }
 });
+
+// ═══════════════════════════════════════════════════════════════
+// AUTENTICAÇÃO E LIBERAÇÃO DO PDV POR CRACHÁ QR
+// ═══════════════════════════════════════════════════════════════
+window.abrirScannerCrachaPDV = function() {
+  if (!window.ChefQR) {
+    alert('Módulo de QR Code não carregado.');
+    return;
+  }
+  window.ChefQR.abrirScanner({
+    title: 'Autenticar Operador no PDV',
+    subtitle: 'Aproxime o crachá do colaborador da câmera para liberar o caixa',
+    onScan: async (decodedText) => {
+      await window.processarQrCodeOperadorPDV(decodedText);
+    }
+  });
+};
+
+window.processarQrCodeOperadorPDV = async function(tokenOrText) {
+  try {
+    const res = await fetch('/api/auth/qr-login-colaborador', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ qrcode_token: tokenOrText, estacao: 'PDV Caixa Principal' })
+    });
+    const data = await res.json();
+    if (data && data.success && data.funcionario) {
+      const f = data.funcionario;
+      localStorage.setItem('chef_token', data.token);
+      localStorage.setItem('chef_operador_nome', f.nome);
+      localStorage.setItem('chef_operador_cargo', f.cargo);
+      localStorage.setItem('chef_session', JSON.stringify({
+        token: data.token,
+        usuario: f.usuario,
+        cargo: f.cargo,
+        nome: f.nome,
+        id: f.id
+      }));
+
+      // Atualiza badge ou feedback na interface
+      if (typeof window.showToastNotification === 'function') {
+        window.showToastNotification(`Operador ${f.nome} (${f.cargo}) autenticado via Crachá QR!`, 'success');
+      } else if (typeof window.showNotification === 'function') {
+        window.showNotification(`Operador ${f.nome} (${f.cargo}) autenticado!`, 'success');
+      } else {
+        alert(`Operador ${f.nome} (${f.cargo}) autenticado com sucesso!`);
+      }
+      return true;
+    } else {
+      alert((data && data.error) || 'Crachá não reconhecido ou colaborador desativado.');
+      return false;
+    }
+  } catch(e) {
+    alert('Erro de conexão ao validar o crachá do colaborador.');
+    return false;
+  }
+};
+
+// Leitor Global de Bip USB para o PDV Caixa
+(function initPdvUsbQrScanner() {
+  let usbBuf = '';
+  let usbTime = null;
+  window.addEventListener('keydown', (e) => {
+    const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+
+    if (e.key === 'Enter') {
+      if (usbBuf.startsWith('CHEF-COLAB:') || usbBuf.startsWith('COLAB-')) {
+        window.processarQrCodeOperadorPDV(usbBuf);
+      }
+      usbBuf = '';
+    } else if (e.key && e.key.length === 1) {
+      usbBuf += e.key;
+      clearTimeout(usbTime);
+      usbTime = setTimeout(() => { usbBuf = ''; }, 300);
+    }
+  });
+})();

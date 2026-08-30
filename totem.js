@@ -31,6 +31,7 @@
   var aguardandoPix = false;
   var idleDeadline = 0;
   var idleTimer = null;
+  var CLIENTE_IDENTIFICADO = null;
 
   var $ = function (id) { return document.getElementById(id); };
 
@@ -655,18 +656,114 @@
         observations: c.obs || ''
       };
     });
+    var nomeFinal = CLIENTE_IDENTIFICADO ? CLIENTE_IDENTIFICADO.nome : ('Cliente ' + TOTEM_MESA);
     socket.emit('criar_pedido_qr', {
       mesa: TOTEM_MESA,
-      cliente_nome: 'Cliente ' + TOTEM_MESA,
+      cliente_nome: nomeFinal,
       itens: itens,
       valor_total: carrinhoTotal(),
       pago_pix: !!pagoPix,
       chave_pix: chavePix || '',
-      cliente_id: null,
+      cliente_id: CLIENTE_IDENTIFICADO ? CLIENTE_IDENTIFICADO.id : null,
       is_fila: false,
       origem: 'totem'
     });
   }
+
+  /* ═══════════ IDENTIFICAÇÃO DO CLIENTE / MANUTENÇÃO POR QR CODE ═══════════ */
+
+  function atualizarBadgeClienteTotem() {
+    var badge = $('totem-cliente-badge');
+    var nomeEl = $('totem-cliente-nome');
+    var scanBtn = $('btn-totem-scan-header');
+    if (!badge || !nomeEl) return;
+
+    if (CLIENTE_IDENTIFICADO) {
+      nomeEl.textContent = CLIENTE_IDENTIFICADO.nome;
+      badge.style.display = 'inline-flex';
+      if (scanBtn) scanBtn.style.display = 'none';
+    } else {
+      badge.style.display = 'none';
+      if (scanBtn) scanBtn.style.display = 'inline-flex';
+    }
+  }
+
+  window.totemLogoutCliente = function(e) {
+    if (e) e.stopPropagation();
+    CLIENTE_IDENTIFICADO = null;
+    atualizarBadgeClienteTotem();
+  };
+
+  window.totemAbrirScannerCliente = function() {
+    if (!window.ChefQR) {
+      alert('Módulo de QR Code carregando. Tente novamente em alguns segundos.');
+      return;
+    }
+    window.ChefQR.abrirScanner({
+      title: 'Identificar Cliente no Totem',
+      subtitle: 'Aponte o QR Code do seu aplicativo ou comanda digital para a câmera',
+      onScan: async function(decodedText) {
+        await window.totemProcessarQr(decodedText);
+      }
+    });
+  };
+
+  window.totemProcessarQr = async function(texto) {
+    // 1. Verifica se é crachá de funcionário para desbloqueio/manutenção
+    if (texto.startsWith('CHEF-COLAB:') || texto.startsWith('COLAB-')) {
+      try {
+        var resColab = await fetch('/api/auth/qr-login-colaborador', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ qrcode_token: texto, estacao: 'Totem de Autoatendimento' })
+        });
+        var dataColab = await resColab.json();
+        if (dataColab && dataColab.success) {
+          alert('Acesso Colaborador: ' + dataColab.funcionario.nome + ' (' + dataColab.funcionario.cargo + ') autorizado!');
+          return true;
+        }
+      } catch(e) {}
+    }
+
+    // 2. Valida cliente
+    try {
+      var res = await fetch('/api/auth/qr-identificar-cliente', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ qrcode_token: texto, restaurante_id: restauranteId })
+      });
+      var data = await res.json();
+      if (data && data.success && data.cliente) {
+        CLIENTE_IDENTIFICADO = data.cliente;
+        atualizarBadgeClienteTotem();
+        esconderHomeECatalogo();
+        alert('Bem-vindo(a), ' + data.cliente.nome + '! Seu pedido será associado à sua conta.');
+        return true;
+      } else {
+        alert((data && data.error) || 'Código QR não reconhecido.');
+        return false;
+      }
+    } catch(e) {
+      alert('Erro de conexão ao identificar o cliente.');
+      return false;
+    }
+  };
+
+  // Leitor USB / Bip Global no Totem
+  var totemUsbBuf = '';
+  var totemUsbTimer = null;
+  window.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      if (totemUsbBuf.length >= 5) {
+        window.totemProcessarQr(totemUsbBuf);
+      }
+      totemUsbBuf = '';
+    } else if (e.key && e.key.length === 1) {
+      totemUsbBuf += e.key;
+      clearTimeout(totemUsbTimer);
+      totemUsbTimer = setTimeout(function() { totemUsbBuf = ''; }, 300);
+    }
+  });
 
   socket.on('criar_pedido_qr_resposta', function (res) {
     if (res && res.success) {

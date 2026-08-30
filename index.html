@@ -27,6 +27,8 @@
   <!-- QR Code local (funciona sem internet) -->
   <script src="/vendor/qrcode/qrcode-generator.js"></script>
   <script src="/vendor/qrcode/qr-helper.js"></script>
+  <script src="/vendor/html5-qrcode/html5-qrcode.min.js"></script>
+  <script src="/qr-auth-badge.js"></script>
 
   <!-- Intro.js for Guided Tour -->
   <link rel="stylesheet" href="/vendor/introjs/introjs.min.css" />
@@ -470,6 +472,8 @@
         title="Financeiro e Relatórios"><i class="ph ph-currency-dollar"></i></button>
       <button class="toolbar-btn" id="btn-admin-panel" onclick="window.location.href='configuracoes.html'"
         title="Configurações e RH"><i class="ph ph-gear"></i></button>
+      <button class="toolbar-btn" id="btn-qr-auth-caixa" onclick="window.abrirScannerCrachaPDV && window.abrirScannerCrachaPDV()"
+        title="Liberar Operador com Crachá QR" style="color:#f59e0b;"><i class="ph ph-qr-code"></i></button>
       <button class="toolbar-btn" id="btn-theme-toggle-top" onclick="if(window.ChefTheme) window.ChefTheme.toggle()" title="Alternar Tema (Claro / Escuro)">
         <i class="ph ph-sun" id="theme-toggle-icon"></i>
       </button>

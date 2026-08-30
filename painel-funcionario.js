@@ -84,22 +84,114 @@ function initPainelFuncionarioDOM() {
   let loginMode = 'usuario';
   const btnModeUsuario = document.getElementById('btn-mode-usuario');
   const btnModePin = document.getElementById('btn-mode-pin');
+  const btnModeQr = document.getElementById('btn-mode-qr');
   const formUsuario = document.getElementById('login-form-usuario');
   const formPin = document.getElementById('login-form-pin');
+  const formQr = document.getElementById('login-form-qr');
+  const btnAbrirScannerLogin = document.getElementById('btn-abrir-scanner-login');
 
-  if (btnModeUsuario) btnModeUsuario.addEventListener('click', () => {
-    loginMode = 'usuario';
-    btnModeUsuario.style.background = 'white'; btnModeUsuario.style.color = '#7c3aed'; btnModeUsuario.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
-    btnModePin.style.background = 'transparent'; btnModePin.style.color = '#6b7280'; btnModePin.style.boxShadow = 'none';
-    formUsuario.style.display = 'block'; formPin.style.display = 'none';
+  function setMode(mode) {
+    loginMode = mode;
+    [btnModeUsuario, btnModePin, btnModeQr].forEach(b => {
+      if (b) {
+        b.style.background = 'transparent';
+        b.style.color = '#6b7280';
+        b.style.boxShadow = 'none';
+      }
+    });
+    if (formUsuario) formUsuario.style.display = 'none';
+    if (formPin) formPin.style.display = 'none';
+    if (formQr) formQr.style.display = 'none';
+
+    if (mode === 'usuario') {
+      if (btnModeUsuario) { btnModeUsuario.style.background = 'white'; btnModeUsuario.style.color = '#7c3aed'; btnModeUsuario.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)'; }
+      if (formUsuario) formUsuario.style.display = 'block';
+    } else if (mode === 'pin') {
+      if (btnModePin) { btnModePin.style.background = 'white'; btnModePin.style.color = '#7c3aed'; btnModePin.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)'; }
+      if (formPin) { formPin.style.display = 'block'; const pinInput = document.getElementById('login-pin'); if (pinInput) pinInput.focus(); }
+    } else if (mode === 'qr') {
+      if (btnModeQr) { btnModeQr.style.background = 'white'; btnModeQr.style.color = '#7c3aed'; btnModeQr.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)'; }
+      if (formQr) formQr.style.display = 'block';
+    }
+  }
+
+  if (btnModeUsuario) btnModeUsuario.addEventListener('click', () => setMode('usuario'));
+  if (btnModePin) btnModePin.addEventListener('click', () => setMode('pin'));
+  if (btnModeQr) btnModeQr.addEventListener('click', () => {
+    setMode('qr');
+    // Abre o scanner automaticamente ao clicar na aba
+    iniciarLeituraCrachaLogin();
   });
-  if (btnModePin) btnModePin.addEventListener('click', () => {
-    loginMode = 'pin';
-    btnModePin.style.background = 'white'; btnModePin.style.color = '#7c3aed'; btnModePin.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
-    btnModeUsuario.style.background = 'transparent'; btnModeUsuario.style.color = '#6b7280'; btnModeUsuario.style.boxShadow = 'none';
-    formPin.style.display = 'block'; formUsuario.style.display = 'none';
-    const pinInput = document.getElementById('login-pin');
-    if (pinInput) pinInput.focus();
+
+  function iniciarLeituraCrachaLogin() {
+    if (window.ChefQR) {
+      window.ChefQR.abrirScanner({
+        title: 'Aproxime seu Crachá da Câmera',
+        subtitle: 'Posicione o QR Code do seu crachá para autenticar',
+        onScan: async (decodedText) => {
+          realizarLoginPorQrCode(decodedText);
+        }
+      });
+    }
+  }
+
+  if (btnAbrirScannerLogin) {
+    btnAbrirScannerLogin.onclick = iniciarLeituraCrachaLogin;
+  }
+
+  async function realizarLoginPorQrCode(qrCodeTexto) {
+    const errBox = document.getElementById('login-error-msg');
+    if (errBox) errBox.style.display = 'none';
+
+    try {
+      const res = await fetch('/api/auth/qr-login-colaborador', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ qrcode_token: qrCodeTexto, estacao: 'Painel Colaborador' })
+      });
+      const data = await res.json();
+      if (data && data.success && data.funcionario) {
+        localStorage.setItem('chef_token', data.token);
+        localStorage.setItem('chef_session', JSON.stringify({
+          token: data.token,
+          usuario: data.funcionario.usuario,
+          cargo: data.funcionario.cargo,
+          nome: data.funcionario.nome,
+          id: data.funcionario.id
+        }));
+        if (data.restaurante_id) localStorage.setItem('restaurante_id', data.restaurante_id);
+
+        if (socket && typeof socket.emit === 'function') {
+          socket.emit('login_funcionario_token', data.token);
+        } else {
+          window.location.reload();
+        }
+      } else {
+        showLoginError((data && data.error) || 'Crachá não reconhecido ou colaborador inativo.');
+      }
+    } catch(e) {
+      showLoginError('Erro de conexão ao validar o crachá.');
+    }
+  }
+
+  // Leitor Global de Bip USB para Crachá
+  let usbBuffer = '';
+  let usbTimer = null;
+  window.addEventListener('keydown', (e) => {
+    // Se estiver digitando em um input normal, ignora
+    const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+
+    if (e.key === 'Enter') {
+      if (usbBuffer.startsWith('CHEF-COLAB:') || usbBuffer.startsWith('COLAB-') || usbBuffer.length >= 8) {
+        realizarLoginPorQrCode(usbBuffer);
+      }
+      usbBuffer = '';
+    } else if (e.key && e.key.length === 1) {
+      usbBuffer += e.key;
+      clearTimeout(usbTimer);
+      usbTimer = setTimeout(() => { usbBuffer = ''; }, 300);
+    }
   });
 
   // Login
@@ -436,6 +528,15 @@ socket.on('login_success', (user) => {
     } else {
       btnToggle.style.display = 'none';
     }
+  }
+
+  const btnMeuCracha = document.getElementById('btn-meu-cracha');
+  if (btnMeuCracha) {
+    btnMeuCracha.onclick = () => {
+      if (window.ChefQR && currentUser) {
+        window.ChefQR.abrirModalMeuCracha(currentUser, restConfig || {});
+      }
+    };
   }
 
   socket.emit('get_metricas_funcionario', user.id);

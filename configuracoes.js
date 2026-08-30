@@ -3674,11 +3674,14 @@ socket.on('funcionarios_atualizados', (funcs) => {
           ${telText}
         </td>
         <td style="padding: 14px 14px; text-align: center;">
-          <div style="display: flex; gap: 8px; justify-content: center;">
-            <button onclick="window.abrirModalEditarFuncionario(${f.id})" style="background: rgba(252,75,21,0.12); border: 1px solid rgba(252,75,21,0.3); color: #fc4b15; padding: 7px 14px; border-radius: 8px; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 5px; font-size: 12.5px; transition: transform 0.1s;">
+          <div style="display: flex; gap: 6px; justify-content: center; flex-wrap: wrap;">
+            <button onclick="window.abrirCrachaFuncionario(${f.id})" style="background: #0f172a; border: 1px solid #1e293b; color: #ffffff; padding: 7px 12px; border-radius: 8px; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 5px; font-size: 12px;">
+              <i class="ph-bold ph-identification-card"></i> Crachá
+            </button>
+            <button onclick="window.abrirModalEditarFuncionario(${f.id})" style="background: rgba(252,75,21,0.12); border: 1px solid rgba(252,75,21,0.3); color: #fc4b15; padding: 7px 12px; border-radius: 8px; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 5px; font-size: 12px; transition: transform 0.1s;">
               <i class="ph-bold ph-pencil-simple"></i> Editar RH
             </button>
-            <button onclick="window.deleteFuncionario(${f.id})" style="background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); color: #ef4444; padding: 7px 10px; border-radius: 8px; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 12.5px; transition: transform 0.1s;">
+            <button onclick="window.deleteFuncionario(${f.id})" style="background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); color: #ef4444; padding: 7px 10px; border-radius: 8px; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 12px; transition: transform 0.1s;">
               <i class="ph-bold ph-trash"></i>
             </button>
           </div>
@@ -3694,6 +3697,27 @@ socket.on('funcionarios_atualizados', (funcs) => {
       ativos.map(f => `<option value="${f.id}">${escapeHtml(f.nome)} (${escapeHtml(f.cargo)})</option>`).join('');
   }
 });
+
+window.abrirCrachaFuncionario = (id) => {
+  const func = (window.funcionariosList || []).find(f => f.id === id);
+  if (!func) return;
+  const restConfig = window.restConfig || { rest_nome: document.getElementById('admin-rest-nome')?.value || 'Chef Cozinha' };
+  if (window.ChefQR) {
+    window.ChefQR.abrirModalMeuCracha(func, restConfig);
+  }
+};
+
+window.imprimirTodosCrachas = () => {
+  const ativos = (window.funcionariosList || []).filter(f => f.status !== 'Pendente');
+  if (!ativos || ativos.length === 0) {
+    alert('Nenhum colaborador ativo cadastrado para impressão de crachás.');
+    return;
+  }
+  const restNome = document.getElementById('admin-rest-nome')?.value || 'Chef Cozinha';
+  if (window.ChefQR) {
+    window.ChefQR.imprimirCrachasLote(ativos, restNome);
+  }
+};
 
 window.abrirModalEditarFuncionario = (id) => {
   const func = (window.funcionariosList || []).find(f => f.id === id);

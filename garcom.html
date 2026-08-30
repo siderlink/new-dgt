@@ -1450,6 +1450,8 @@
   </style>
   <script src="/vendor/html5-qrcode/html5-qrcode.min.js"></script>
   <script src="/vendor/morphdom/morphdom.min.js"></script>
+  <script src="/vendor/qrcode/qrcode-generator.js"></script>
+  <script src="/qr-auth-badge.js"></script>
 
   <script src="/locales.js"></script>
   <script src="/broadcast.js"></script>
@@ -1481,6 +1483,9 @@
         <button id="btn-colaborador" style="display:none; color:#9b59b6; font-size:24px;"
           onclick="window.location.href='/painel-funcionario.html'" title="Área do Colaborador"><i
             class="ph ph-user"></i></button>
+        <button id="btn-meu-cracha-garcom" style="display:none; color:#0f172a; font-size:24px;"
+          onclick="window.abrirMeuCrachaGarcom && window.abrirMeuCrachaGarcom()" title="Meu Crachá QR"><i
+            class="ph ph-identification-card"></i></button>
       </div>
       <h1 id="header-title">Chef Garçom</h1>
       <div style="display: flex; gap: 8px;">
@@ -1503,10 +1508,11 @@
 
       <div style="display:flex; gap:0; margin-bottom:16px; background:#f3f4f6; border-radius:10px; padding:3px;">
         <button id="btn-mode-usuario"
-          style="flex:1; padding:8px; border:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; background:white; color:#7c3aed; box-shadow:0 1px 3px rgba(0,0,0,0.1);">Usuário
-          / Senha</button>
+          style="flex:1; padding:8px 4px; border:none; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; background:white; color:#7c3aed; box-shadow:0 1px 3px rgba(0,0,0,0.1);">Senha</button>
         <button id="btn-mode-pin"
-          style="flex:1; padding:8px; border:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; background:transparent; color:#6b7280;">PIN</button>
+          style="flex:1; padding:8px 4px; border:none; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; background:transparent; color:#6b7280;">PIN</button>
+        <button id="btn-mode-qr"
+          style="flex:1; padding:8px 4px; border:none; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; background:transparent; color:#6b7280; display:flex; align-items:center; justify-content:center; gap:3px;"><i class="ph ph-qr-code"></i> Crachá</button>
       </div>
 
       <div id="login-form-usuario">
@@ -1516,6 +1522,11 @@
       <div id="login-form-pin" style="display:none;">
         <input type="text" id="input-pin" placeholder="PIN de 6 dígitos" maxlength="6" aria-label="PIN de acesso"
           style="text-align:center; font-size:24px; letter-spacing:8px; font-family:monospace; font-weight:700; padding:12px; border:2px solid #d1d5db; border-radius:10px; width:100%; box-sizing:border-box;">
+      </div>
+      <div id="login-form-qr" style="display:none; text-align:center; padding:8px 0;">
+        <button type="button" id="btn-abrir-camera-login-garcom" style="width:100%; padding:14px; background:#7c3aed; color:white; border:none; border-radius:12px; font-size:14px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;">
+          <i class="ph ph-camera"></i> Escanear Crachá QR
+        </button>
       </div>
 
       <button id="btn-login" aria-label="Entrar no sistema">Entrar</button>
@@ -1631,6 +1642,11 @@
           <button id="btn-opt-add"
             style="padding: 15px; border-radius: 14px; border: none; background: #fc4b15; color: white; font-weight: 800; font-size: 15.5px; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; box-shadow: 0 4px 14px rgba(252,75,21,0.35);">
             <i class="ph-bold ph-plus" style="font-size: 22px;"></i> Adicionar Itens
+          </button>
+
+          <button id="btn-opt-vincular-cliente" onclick="window.garcomEscanearClienteMesa && window.garcomEscanearClienteMesa()"
+            style="padding: 15px; border-radius: 14px; border: none; background: #3b82f6; color: white; font-weight: 800; font-size: 15px; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; box-shadow: 0 4px 14px rgba(59,130,246,0.35);">
+            <i class="ph-bold ph-user-circle-plus" style="font-size: 22px;"></i> Escanear QR do Cliente
           </button>
 
           <button id="btn-opt-qr"
